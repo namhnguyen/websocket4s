@@ -220,7 +220,7 @@ class ScenariosTest extends FunSuite with BeforeAndAfterAll with BeforeAndAfter{
     val endPoint2Message = "Hello World"
     clientAdapter1.connect(serverAdapter1)
     clientAdapter2.connect(serverAdapter2)
-    Thread.sleep(1)
+    Thread.sleep(10)
     val id = serverEndPoint1.id.get
     clientEndPoint2.tell(id,endPoint2Message)
     val endPoint1ReceivedMessage = Await.result(endPoint1MessageReceivedPromise.future,Duration.Inf)
@@ -250,7 +250,7 @@ class ScenariosTest extends FunSuite with BeforeAndAfterAll with BeforeAndAfter{
     val endPoint2Message = "End Point 2 asks ???"
     clientAdapter1.connect(serverAdapter1)
     clientAdapter2.connect(serverAdapter2)
-    Thread.sleep(1)
+    Thread.sleep(10)
     val id = serverEndPoint1.id.get
     val futureResponse = clientEndPoint2.ask(id,endPoint2Message)
     val endPoint1ReceivedRequest = Await.result(endPoint1RequestReceivedPromise.future,Duration.Inf)

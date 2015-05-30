@@ -53,7 +53,7 @@ class WebSocketAdapterMemImplTest extends FunSuite {
     val sentMessage = "Hello World"
     clientEndPoint.connect(serverEndPoint)
     clientEndPoint.push(sentMessage)
-    Thread.sleep(1)
+    Thread.sleep(10)
     assert(clientConnected)
     assert(serverConnected)
     assert(serverMessage.isDefined)
