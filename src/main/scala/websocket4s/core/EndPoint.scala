@@ -1,6 +1,8 @@
 package websocket4s.core
 
 import scala.concurrent.Future
+import scala.concurrent.duration.Duration
+
 ////////////////////////////////////////////////////////////////////////////////
 /**
  * Define a Web Socket EndPoint behaviours
@@ -42,7 +44,8 @@ trait EndPoint {
    * @return
    */
   def askTags(tags:Set[String],request:String):Future[Response]
-//  //----------------------------------------------------------------------------
+  def askTags(tags:Set[String],request:String,duration: Duration):Future[Response]
+  //----------------------------------------------------------------------------
   //Remove because this is not applicable for Client EndPoint
 //  /**
 //   * Use this function when this EndPoint want to ask other EndPoints something
@@ -70,6 +73,8 @@ trait EndPoint {
    */
   def ask(id:String,request:String):Future[Response]
   //----------------------------------------------------------------------------
+  def ask(id:String,request:String,duration:Duration):Future[Response]
+  //----------------------------------------------------------------------------
   /**
    * Tell the immediate EndPoint which is currently connect to the current EndPoint
    * a message
@@ -84,6 +89,8 @@ trait EndPoint {
    * @return
    */
   def ask(request:String):Future[Response]
+  //----------------------------------------------------------------------------
+  def ask(request:String,duration:Duration):Future[Response]
   //----------------------------------------------------------------------------
 
 }

@@ -41,7 +41,7 @@ final class ServerEndPoint
   ) extends EndPoint{ self =>
   //----------------------------------------------------------------------------
   private val logger = LoggerFactory.getLogger(this.getClass)
-  private val timeOut = 10 //seconds
+  private val timeOut = Duration(10,TimeUnit.SECONDS) //seconds
   private val timeoutException = new TimeoutException()
   private var proxyActorRef:Option[ActorRef] = None
   private val askTable = new TrieMap[String,Promise[Response]]()
@@ -99,7 +99,7 @@ final class ServerEndPoint
 
               val scheduled = WebSocketSystem.scheduler.schedule(new Runnable {
                 override def run(): Unit = self.clientRequestAnySet.remove(packageId)
-              },timeOut,TimeUnit.SECONDS)
+              },timeOut.toMillis,TimeUnit.MILLISECONDS)
 
               if (transportPackage.to.isDefined||transportPackage.tags.isDefined){
                 sendPackage(transportPackage)
@@ -261,15 +261,15 @@ final class ServerEndPoint
    * @param request
    * @return
    */
-  override def ask(id: String, request: String): Future[Response] = {
+  override def ask(id: String, request: String,duration: Duration): Future[Response] = {
     val promise = Promise[Response]()
-    timeoutPromises(timeOut,TimeUnit.SECONDS,promise)
+    timeoutPromises(duration.toMillis,TimeUnit.MILLISECONDS,promise)
 
     actorRegister.getEntry(id).map(someEntry => {
       if (someEntry.isDefined) {
         val requestId = WebSocketSystem.GUID.randomGUID
         askTable += ((requestId,promise))
-        timeoutPromises(timeOut,TimeUnit.SECONDS,requestId)
+        timeoutPromises(duration.toMillis,TimeUnit.MILLISECONDS,requestId)
         val entry = someEntry.get
         val transportPackage = TransportPackage(
           from = self.id
@@ -287,6 +287,9 @@ final class ServerEndPoint
     promise.future
   }
   //----------------------------------------------------------------------------
+  override def ask(id: String, request: String): Future[Response] =
+    ask(id,request,timeOut)
+  //----------------------------------------------------------------------------
   /**
    * Use this function when this EndPoint want to ask other EndPoints something
    * and require all the Response to be returned
@@ -294,19 +297,19 @@ final class ServerEndPoint
    * @param request
    * @return
    */
-  def askAllTags(tags: Set[String], request: String): Future[List[Future[Response]]] = {
+  def askAllTags(tags: Set[String], request: String,duration:Duration): Future[List[Future[Response]]] = {
     val promise = Promise[List[Future[Response]]]()
 
     WebSocketSystem.scheduler.schedule(new Runnable {
       override def run(): Unit = promise.tryFailure(timeoutException)
-    },timeOut,TimeUnit.SECONDS)
+    },duration.toMillis,TimeUnit.MILLISECONDS)
 
     actorRegister.queryEntries(tags).map(entryList=>{
       val listFuture = entryList.map(entry=>{
         val requestId = WebSocketSystem.GUID.randomGUID
         val entryPromise = Promise[Response]()
         askTable += ((requestId,entryPromise))
-        timeoutPromises(timeOut,TimeUnit.SECONDS,requestId)
+        timeoutPromises(duration.toMillis,TimeUnit.MILLISECONDS,requestId)
         val transportPackage = TransportPackage(
           from = self.id
           , to = None
@@ -331,10 +334,10 @@ final class ServerEndPoint
    * @param request
    * @return
    */
-  override def askTags(tags: Set[String], request: String): Future[Response] = {
+  override def askTags(tags: Set[String], request: String,duration:Duration): Future[Response] = {
     val promise = Promise[Response]()
     val requestId = WebSocketSystem.GUID.randomGUID
-    timeoutPromises(timeOut,TimeUnit.SECONDS,promise)
+    timeoutPromises(duration.toMillis,TimeUnit.MILLISECONDS,promise)
     actorRegister.queryEntries(tags).map(entryList => {
       val transportPackage = TransportPackage(
         from = self.id
@@ -350,7 +353,9 @@ final class ServerEndPoint
 
     promise.future
   }
-
+  //----------------------------------------------------------------------------
+  override def askTags(tags: Set[String], request: String): Future[Response]
+    = askTags(tags,request,timeOut)
   //----------------------------------------------------------------------------
   /**
    * Ask the immediate EndPoint which is currently connect to the current EndPoint
@@ -358,7 +363,7 @@ final class ServerEndPoint
    * @param request
    * @return
    */
-  override def ask(request: String): Future[Response] = {
+  override def ask(request: String,duration:Duration): Future[Response] = {
     val requestId = WebSocketSystem.GUID.randomGUID
     val promise = Promise[Response]()
     askTable += ((requestId,promise))
@@ -370,19 +375,21 @@ final class ServerEndPoint
       ,data = request
       , `type` = TransportPackage.Type.Request)
     self.pushObject(transportPackage)
-    timeoutPromises(timeOut,TimeUnit.SECONDS,requestId)
+    timeoutPromises(duration.toMillis,TimeUnit.MILLISECONDS,requestId)
     promise.future
   }
-
   //----------------------------------------------------------------------------
-  private def timeoutPromises(timeOut:Int,unit:TimeUnit,promises:Promise[Response]*):Unit =
+  override def ask(request: String): Future[Response] =
+    ask(request,timeOut)
+  //----------------------------------------------------------------------------
+  private def timeoutPromises(timeOut:Long,unit:TimeUnit,promises:Promise[Response]*):Unit =
     promises.map(promise=> {
       WebSocketSystem.scheduler.schedule(new Runnable {
         override def run(): Unit = promise.tryFailure(timeoutException)
       },timeOut,TimeUnit.SECONDS)
     })
   //----------------------------------------------------------------------------
-  private def timeoutPromises(timeOut:Int,unit:TimeUnit,keys:String*):Unit =
+  private def timeoutPromises(timeOut:Long,unit:TimeUnit,keys:String*):Unit =
     keys.map(key => {
       askTable.get(key).map( promise =>{
         WebSocketSystem.scheduler.schedule(new Runnable {

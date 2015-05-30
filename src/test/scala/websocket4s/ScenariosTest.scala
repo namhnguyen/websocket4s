@@ -327,6 +327,10 @@ class ScenariosTest extends FunSuite with BeforeAndAfterAll with BeforeAndAfter{
     clientAdapter3.close()
   }
   //----------------------------------------------------------------------------
+  test("Test Change Tags and publish..."){
+
+  }
+  //----------------------------------------------------------------------------
   override def afterAll(): Unit ={
     println("Clean up Test Environment...")
     Thread.sleep(500)

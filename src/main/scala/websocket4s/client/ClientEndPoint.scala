@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory
 import websocket4s.core.JsonUtils._
 import websocket4s.core._
 import scala.collection.concurrent.TrieMap
+import scala.concurrent.duration.Duration
 import scala.concurrent.{Promise, Future}
 import scala.concurrent.ExecutionContext.Implicits.global
 ////////////////////////////////////////////////////////////////////////////////
@@ -18,7 +19,7 @@ final class ClientEndPoint(webSocketAdapter: WebSocketAdapter) extends EndPoint{
   private val logger = LoggerFactory.getLogger(this.getClass)
   private val askTable = new TrieMap[String,Promise[Response]]()
   //used for storing ClientRequestAny Ids
-  private val timeOut = 10 //seconds
+  private val timeOut = Duration(10,TimeUnit.SECONDS) //seconds
   private val timeoutException = new TimeoutException()
   private var messageReceived:Option[(Message)=>Unit] = None
   private var requestReceived:Option[(Request)=>Future[String]] = None
@@ -131,12 +132,12 @@ final class ClientEndPoint(webSocketAdapter: WebSocketAdapter) extends EndPoint{
    * @param request
    * @return
    */
-  override def ask(id: String, request: String): Future[Response] = {
+  override def ask(id: String, request: String, duration: Duration): Future[Response] = {
     val promise = Promise[Response]()
 
     val requestId = WebSocketSystem.GUID.randomGUID
     askTable += ((requestId,promise))
-    timeoutKeys(timeOut,TimeUnit.SECONDS,requestId)
+    timeoutKeys(duration.toMillis,TimeUnit.MILLISECONDS,requestId)
     val transportPackage = TransportPackage(
         from = None
       , to = Some(id)
@@ -148,17 +149,20 @@ final class ClientEndPoint(webSocketAdapter: WebSocketAdapter) extends EndPoint{
     promise.future
   }
   //----------------------------------------------------------------------------
+  override def ask(id: String, request: String): Future[Response]
+    = ask(id,request,timeOut)
+  //----------------------------------------------------------------------------
   /**
    * Ask the immediate EndPoint which is currently connect to the current EndPoint
    * and demand a Future Response
    * @param request
    * @return
    */
-  override def ask(request: String): Future[Response] = {
+  override def ask(request: String,duration: Duration): Future[Response] = {
     val promise = Promise[Response]()
     val requestId = WebSocketSystem.GUID.randomGUID
     askTable += ((requestId,promise))
-    timeoutKeys(timeOut,TimeUnit.SECONDS,requestId)
+    timeoutKeys(duration.toMillis,TimeUnit.MILLISECONDS,requestId)
     val transportPackage = TransportPackage(
        from=None
       ,to=None
@@ -170,6 +174,8 @@ final class ClientEndPoint(webSocketAdapter: WebSocketAdapter) extends EndPoint{
     promise.future
   }
   //----------------------------------------------------------------------------
+  override def ask(request: String):Future[Response] = ask(request,timeOut)
+  //----------------------------------------------------------------------------
   /**
    * When this EndPoint want to ask something from other EndPoints whose tags are
    * given in the Tag Set, only the first response from any EndPoint will be returned
@@ -177,11 +183,11 @@ final class ClientEndPoint(webSocketAdapter: WebSocketAdapter) extends EndPoint{
    * @param request
    * @return
    */
-  override def askTags(tags: Set[String], request: String): Future[Response] = {
+  override def askTags(tags: Set[String], request: String,duration: Duration): Future[Response] = {
     val promise = Promise[Response]()
     val requestId = WebSocketSystem.GUID.randomGUID
     askTable += ((requestId,promise))
-    timeoutKeys(timeOut,TimeUnit.SECONDS,requestId)
+    timeoutKeys(duration.toMillis,TimeUnit.MILLISECONDS,requestId)
     val transportPackage = TransportPackage(
       from=None
       ,to=None
@@ -193,14 +199,17 @@ final class ClientEndPoint(webSocketAdapter: WebSocketAdapter) extends EndPoint{
     promise.future
   }
   //----------------------------------------------------------------------------
+  override def askTags(tags: Set[String], request: String): Future[Response] =
+    askTags(tags,request,timeOut)
 
+  //----------------------------------------------------------------------------
   /**
    * Use WebSocketAdapter to serialize and push object to the client
    * @param any
    */
   def pushObject(any:AnyRef):Unit = webSocketAdapter.push(serialize(any))
   //----------------------------------------------------------------------------
-  private def timeoutKeys(timeOut:Int,unit:TimeUnit,keys:String*):Unit =
+  private def timeoutKeys(timeOut:Long,unit:TimeUnit,keys:String*):Unit =
     keys.map(key => {
       askTable.get(key).map( promise =>{
         WebSocketSystem.scheduler.schedule(new Runnable {
