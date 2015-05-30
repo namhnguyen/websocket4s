@@ -60,7 +60,7 @@ class WebSocketAdapterMemImplTest extends FunSuite {
     assert(sentMessage===serverMessage.get)
 
     clientEndPoint.close() //async
-    Thread.sleep(10)
+    Thread.sleep(100)
     assert(clientClosed)
     assert(serverClosed)
   }
