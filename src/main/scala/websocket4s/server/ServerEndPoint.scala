@@ -35,7 +35,7 @@ import websocket4s.core.JsonUtils._
  * Created by namnguyen on 5/24/15.
  */
 final class ServerEndPoint
-  (val webSocketAdapter: WebSocketAdapter,val tags:Set[String] = Set())
+  (val webSocketAdapter: WebSocketAdapter,var tags:Set[String] = Set())
   ( implicit val actorSystem: ActorSystem
    ,implicit val actorRegister:ActorRegister
   ) extends EndPoint{ self =>
@@ -167,10 +167,18 @@ final class ServerEndPoint
    */
   def id:Option[String] = proxyActorRef.map(ref => ServerEndPoint.getActorPath(ref)) //proxyActorRef.map(_.path.toString)
   //----------------------------------------------------------------------------
-  def setTags(tags:Set[String]):Future[Boolean] =
-    if (id.isDefined)
+  /**
+   * If EndPoint already connect to other EndPoint, it will update the actorRegister
+   * table, otherwise, only update the current tags (in memory)
+   * @param tags
+   * @return
+   */
+  def changeTags(tags:Set[String]):Future[Boolean] =
+    (if (id.isDefined)
       actorRegister.updateTags(id.get,tags).map(_.isDefined)
-    else Future(false)
+    else Future(true)).map(v=> { if (v) this.tags = tags
+      v
+    })
 
   //----------------------------------------------------------------------------
   /**

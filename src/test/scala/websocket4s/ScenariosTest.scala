@@ -263,6 +263,70 @@ class ScenariosTest extends FunSuite with BeforeAndAfterAll with BeforeAndAfter{
 
   }
   //----------------------------------------------------------------------------
+  test("Test send messages to many EndPoints with same tag..."){
+    val endPoint1Tag1 = "DEVICE/SN001"
+    val endPoint1Tag2 = "DEVICE"
+    val endPoint1Tag3 = "UI"
+
+    val endPoint2Tag1 = "UI/DEVICE/SN001"
+    val endPoint2Tag2 = "UI"
+
+    val endPoint3Tag1 = "UI/DEVICE/SN002"
+    val endPoint3Tag2 = "UI"
+
+    val clientAdapter1 = new WebSocketAdapterMemImpl("Client1")
+    val serverAdapter1 = new WebSocketAdapterMemImpl("Server1")
+    val clientEndPoint1 = new ClientEndPoint(clientAdapter1)
+    val serverEndPoint1 = new ServerEndPoint(serverAdapter1
+      ,Set(endPoint1Tag1,endPoint1Tag2,endPoint1Tag3))
+    val endPoint1MessageReceivedPromise = Promise[Message]()
+    clientEndPoint1.onMessageReceived(Some{
+      case msg => endPoint1MessageReceivedPromise.trySuccess(msg)
+    })
+
+    val clientAdapter2 = new WebSocketAdapterMemImpl("Client2")
+    val serverAdapter2 = new WebSocketAdapterMemImpl("Server2")
+    val clientEndPoint2 = new ClientEndPoint(clientAdapter2)
+    val serverEndPoint2 = new ServerEndPoint(serverAdapter2
+      ,Set(endPoint2Tag1,endPoint2Tag2))
+    val endPoint2MessageReceivedPromise = Promise[Message]()
+    clientEndPoint2.onMessageReceived(Some{
+      case msg => endPoint2MessageReceivedPromise.trySuccess(msg)
+    })
+
+    val clientAdapter3 = new WebSocketAdapterMemImpl("Client2")
+    val serverAdapter3 = new WebSocketAdapterMemImpl("Server2")
+    val clientEndPoint3 = new ClientEndPoint(clientAdapter3)
+    val serverEndPoint3 = new ServerEndPoint(serverAdapter3
+      ,Set(endPoint3Tag1,endPoint3Tag2))
+    val endPoint3MessageReceivedPromise = Promise[Message]()
+    clientEndPoint3.onMessageReceived(Some{
+      case msg => endPoint3MessageReceivedPromise.trySuccess(msg)
+    })
+
+    clientAdapter1.connect(serverAdapter1)
+    clientAdapter2.connect(serverAdapter2)
+    clientAdapter3.connect(serverAdapter3)
+    val clientEndPoint1Message = "Hello ALL UI!!!"
+    clientEndPoint1.tellTags(Set("UI"),clientEndPoint1Message)
+
+    val endPoint1ReceivedMessage=Await.result(
+      endPoint1MessageReceivedPromise.future,Duration.Inf)
+    val endPoint2ReceivedMessage=Await.result(
+      endPoint2MessageReceivedPromise.future,Duration.Inf)
+    val endPoint3ReceivedMessage=Await.result(
+      endPoint3MessageReceivedPromise.future,Duration.Inf)
+
+    //self received
+    assert(endPoint1ReceivedMessage.data===clientEndPoint1Message)
+    assert(endPoint2ReceivedMessage.data===clientEndPoint1Message)
+    assert(endPoint3ReceivedMessage.data===clientEndPoint1Message)
+
+    clientAdapter1.close()
+    clientAdapter2.close()
+    clientAdapter3.close()
+  }
+  //----------------------------------------------------------------------------
   override def afterAll(): Unit ={
     println("Clean up Test Environment...")
     Thread.sleep(500)
