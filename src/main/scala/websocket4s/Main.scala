@@ -40,7 +40,8 @@ object Main extends App{
     while(notOk) {
       try {
         system = Some(ActorSystem.create(akkaSystem
-          , config.withValue("akka.remote.netty.tcp.port",ConfigValueFactory.fromAnyRef(nextPort))))
+          , config.withValue("akka.remote.netty.tcp.port",ConfigValueFactory.fromAnyRef(nextPort)))
+        )
         notOk = false
       } catch {
         case exc: Exception => nextPort = nextPort + 1
