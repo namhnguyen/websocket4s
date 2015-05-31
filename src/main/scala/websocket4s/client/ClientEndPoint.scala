@@ -1,9 +1,7 @@
 package websocket4s.client
 
 import java.util.concurrent.{TimeoutException, TimeUnit}
-import com.typesafe.scalalogging.Logger
 import org.slf4j.LoggerFactory
-import websocket4s.core.JsonUtils._
 import websocket4s.core._
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.duration.Duration
@@ -33,10 +31,8 @@ final class ClientEndPoint(webSocketAdapter: WebSocketAdapter) extends EndPoint{
 
     override def receive(dataFrame: String): Unit = {
       try {
-        val json = deserialize(dataFrame)
-        val transportPackage = json.extract[TransportPackage]
+        val transportPackage = TransportPackage.decodeForSocket(dataFrame)
         transportPackage.`type` match {
-
           case TransportPackage.Type.Message |
                TransportPackage.Type.RouteMessage => {
             runMessageReceived(transportPackage)
@@ -205,9 +201,10 @@ final class ClientEndPoint(webSocketAdapter: WebSocketAdapter) extends EndPoint{
   //----------------------------------------------------------------------------
   /**
    * Use WebSocketAdapter to serialize and push object to the client
-   * @param any
+   * @param transportPackage
    */
-  def pushObject(any:AnyRef):Unit = webSocketAdapter.push(serialize(any))
+  def pushObject(transportPackage: TransportPackage):Unit =
+    webSocketAdapter.push(TransportPackage.encodeForSocket(transportPackage))
   //----------------------------------------------------------------------------
   private def timeoutKeys(timeOut:Long,unit:TimeUnit,keys:String*):Unit =
     keys.map(key => {

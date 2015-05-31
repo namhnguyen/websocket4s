@@ -1,5 +1,7 @@
 package websocket4s.core
 
+import websocket4s.core.JsonUtils._
+////////////////////////////////////////////////////////////////////////////////
 /**
  * Created by namnguyen on 5/25/15.
  */
@@ -13,7 +15,7 @@ case class TransportPackage
   , error:Option[String] = None
   , `type`:String = TransportPackage.Type.Message //package Type
   )
-
+////////////////////////////////////////////////////////////////////////////////
 object TransportPackage{
   object Type{
     val Message = "M"
@@ -25,4 +27,22 @@ object TransportPackage{
     val RouteResponseAny = "RPA"
     val RouteMessage = "RM"
   }
+  //----------------------------------------------------------------------------
+  def encodeForSocket(transportPackage: TransportPackage):String = {
+    serialize(transportPackage)
+  }
+  //----------------------------------------------------------------------------
+  def decodeForSocket(dataFrame:String):TransportPackage = {
+    deserialize(dataFrame).extract[TransportPackage]
+  }
+  //----------------------------------------------------------------------------
+  def encodeForActor(transportPackage: TransportPackage):String = {
+    serialize(transportPackage)
+  }
+  //----------------------------------------------------------------------------
+  def decodeForActor(data:String):TransportPackage = {
+    deserialize(data).extract[TransportPackage]
+  }
+  //----------------------------------------------------------------------------
 }
+////////////////////////////////////////////////////////////////////////////////

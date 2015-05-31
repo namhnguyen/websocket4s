@@ -3,15 +3,12 @@ package websocket4s.server
 import java.util.concurrent.{TimeUnit, TimeoutException}
 
 import akka.actor._
-import com.typesafe.scalalogging.Logger
 import org.slf4j.LoggerFactory
 import websocket4s.core._
 import scala.collection.concurrent.TrieMap
-import scala.collection.mutable.HashMap
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Promise, Future}
-import websocket4s.core.JsonUtils._
 ////////////////////////////////////////////////////////////////////////////////
 /**
  * Most of the time ech ServerEndPoint has to represent a ClientEndPoint which
@@ -68,8 +65,7 @@ final class ServerEndPoint
 
     override def receive(dataFrame: String): Unit = {
       try {
-        val json = deserialize(dataFrame)
-        val transportPackage = json.extract[TransportPackage]
+        val transportPackage = TransportPackage.decodeForSocket(dataFrame)
         transportPackage.`type` match {
           case TransportPackage.Type.RouteResponse |
                TransportPackage.Type.RouteResponseAny=> {
@@ -79,7 +75,7 @@ final class ServerEndPoint
               val toAddress = transportPackageWithFrom.to.get
               actorRegister.getEntry(toAddress).map(someEntry =>
                 someEntry.map(entry =>
-                  actorSystem.actorSelection(entry.path) ! serialize(transportPackageWithFrom)
+                  actorSystem.actorSelection(entry.path) ! TransportPackage.encodeForActor(transportPackageWithFrom)
                 )
               )
             }else {
@@ -137,16 +133,16 @@ final class ServerEndPoint
       if (transportPackage.to.isDefined){
         val toAddress = transportPackage.to.get
         val transportPackageWithFrom = transportPackage.copy(from = self.id)
-        val serializedDataFrame = serialize(transportPackageWithFrom)
         actorRegister.getEntry(toAddress).map(someEntry =>
-          someEntry.map(entry => actorSystem.actorSelection(entry.path) ! serializedDataFrame)
+          someEntry.map(entry =>
+            actorSystem.actorSelection(entry.path) ! TransportPackage.encodeForActor(transportPackageWithFrom))
         )
       }else if (transportPackage.tags.isDefined){
         val tags = transportPackage.tags.get
         val transportPackageWithFrom = transportPackage.copy(from = self.id)
-        val serializedDataFrame = serialize(transportPackageWithFrom)
         actorRegister.queryEntries(tags).map(entryList=>
-          entryList.map(entry => actorSystem.actorSelection(entry.path) ! serializedDataFrame)
+          entryList.map(entry =>
+            actorSystem.actorSelection(entry.path) ! TransportPackage.encodeForActor(transportPackageWithFrom))
         )
       }else {
         logger.warn("Message/Request does not have To address or Tags ! Response won't be sent")
@@ -156,9 +152,10 @@ final class ServerEndPoint
   //----------------------------------------------------------------------------
   /**
    * Use WebSocketAdapter to serialize and push object to the client
-   * @param any
+   * @param transportPackage
    */
-  def pushObject(any:AnyRef):Unit = webSocketAdapter.push(serialize(any))
+  def pushObject(transportPackage: TransportPackage):Unit =
+    webSocketAdapter.push(TransportPackage.encodeForSocket(transportPackage))
   //----------------------------------------------------------------------------
   /**
    * Unique ID of a ServerEndPoint, we can use the Actor Absolute Path as ServerEndPoint
@@ -217,7 +214,7 @@ final class ServerEndPoint
           ,id = None
           ,data = message
           , `type` = TransportPackage.Type.Message)
-        actorSystem.actorSelection(entry.path) ! serialize(transportPackage)
+        actorSystem.actorSelection(entry.path) ! TransportPackage.encodeForActor(transportPackage)
       })
     })
   }
@@ -247,9 +244,9 @@ final class ServerEndPoint
         ,id = None
         ,data = message
         , `type` = TransportPackage.Type.Message)
-      val serializedData = serialize(transportPackage)
+      val serializedPackage = TransportPackage.encodeForActor(transportPackage)
       for (entry <- someEntries)
-        actorSystem.actorSelection(entry.path) ! serializedData
+        actorSystem.actorSelection(entry.path) ! serializedPackage
     })
   }
   //----------------------------------------------------------------------------
@@ -278,8 +275,7 @@ final class ServerEndPoint
           , id = Some(requestId)
           , data = request
           , `type` = TransportPackage.Type.Request)
-        val serializedData = serialize(transportPackage)
-        actorSystem.actorSelection(entry.path) ! serializedData
+        actorSystem.actorSelection(entry.path) ! TransportPackage.encodeForActor(transportPackage)
       } else {
         promise.tryFailure(new ActorIdNotFoundException(id))
       }
@@ -317,8 +313,7 @@ final class ServerEndPoint
           , id = Some(requestId)
           , data = request
           , `type` = TransportPackage.Type.Request)
-        val serializedData = serialize(transportPackage)
-        actorSystem.actorSelection(entry.path) ! serializedData
+        actorSystem.actorSelection(entry.path) ! TransportPackage.encodeForActor(transportPackage)
         entryPromise.future
       })
       promise.trySuccess(listFuture)
@@ -346,7 +341,7 @@ final class ServerEndPoint
         , id = Some(requestId)
         , data = request
         , `type` = TransportPackage.Type.Request)
-      val serializedData = serialize(transportPackage)
+      val serializedData = TransportPackage.encodeForActor(transportPackage)
       for (entry <- entryList)
         actorSystem.actorSelection(entry.path) ! serializedData
     })
@@ -426,7 +421,7 @@ final class ServerEndPoint
             , `type` = TransportPackage.Type.Response
           )
           if (fromClient) self.pushObject(transportPackage)
-          else actorSystem.actorSelection(transportPackage.to.get) ! serialize(transportPackage)
+          else actorSystem.actorSelection(transportPackage.to.get) ! TransportPackage.encodeForActor(transportPackage)
         }
       }
 
@@ -443,7 +438,7 @@ final class ServerEndPoint
           )
           logger.error(e.getMessage, e)
           if (fromClient) self.pushObject(transportPackage)
-          else actorSystem.actorSelection(transportPackage.to.get) ! serialize(transportPackage)
+          else actorSystem.actorSelection(transportPackage.to.get) ! TransportPackage.encodeForActor(transportPackage)
         }
       }
     }
@@ -488,7 +483,7 @@ final class ServerEndPoint
     override def receive = {
       case data: String =>
         try {
-          val transportPackage = deserialize(data).extract[TransportPackage]
+          val transportPackage = TransportPackage.decodeForActor(data)
           transportPackage.`type` match {
             //happens only when a client receive a RouteRequest and reply with a RouteResponse
             case TransportPackage.Type.RouteResponse   |
