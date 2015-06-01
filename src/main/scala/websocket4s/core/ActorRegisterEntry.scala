@@ -6,7 +6,6 @@ package websocket4s.core
 case class ActorRegisterEntry
 (
   id:String
-  ,path:String
   ,tags:Set[String]
   ,createTime:Long = System.currentTimeMillis()
 )

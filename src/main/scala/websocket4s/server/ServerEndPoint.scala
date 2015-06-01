@@ -52,7 +52,7 @@ final class ServerEndPoint
       self.proxyActorRef = Some(self.actorSystem.actorOf(Props(new ProxyActor(self))))
       val id = ServerEndPoint.getActorPath(self.proxyActorRef.get)
       self.actorRegister
-        .register(new ActorRegisterEntry(id = id,path = id,self.tags))
+        .register(new ActorRegisterEntry(id = id,self.tags))
     }
 
     override def onClose(reason: String): Unit = {
@@ -73,11 +73,7 @@ final class ServerEndPoint
             if (transportPackage.to.isDefined){
               val transportPackageWithFrom = transportPackage.copy(from=self.id)
               val toAddress = transportPackageWithFrom.to.get
-              actorRegister.getEntry(toAddress).map(someEntry =>
-                someEntry.map(entry =>
-                  actorSystem.actorSelection(entry.path) ! TransportPackage.encodeForActor(transportPackageWithFrom)
-                )
-              )
+              actorSystem.actorSelection(toAddress) ! TransportPackage.encodeForActor(transportPackageWithFrom)
             }else {
               logger.warn("Response does not have TO Address! Response won't be sent")
             }
@@ -133,16 +129,13 @@ final class ServerEndPoint
       if (transportPackage.to.isDefined){
         val toAddress = transportPackage.to.get
         val transportPackageWithFrom = transportPackage.copy(from = self.id)
-        actorRegister.getEntry(toAddress).map(someEntry =>
-          someEntry.map(entry =>
-            actorSystem.actorSelection(entry.path) ! TransportPackage.encodeForActor(transportPackageWithFrom))
-        )
+        actorSystem.actorSelection(toAddress) ! TransportPackage.encodeForActor(transportPackageWithFrom)
       }else if (transportPackage.tags.isDefined){
         val tags = transportPackage.tags.get
         val transportPackageWithFrom = transportPackage.copy(from = self.id)
         actorRegister.queryEntries(tags).map(entryList=>
           entryList.map(entry =>
-            actorSystem.actorSelection(entry.path) ! TransportPackage.encodeForActor(transportPackageWithFrom))
+            actorSystem.actorSelection(entry.id) ! TransportPackage.encodeForActor(transportPackageWithFrom))
         )
       }else {
         logger.warn("Message/Request does not have To address or Tags ! Response won't be sent")
@@ -205,18 +198,14 @@ final class ServerEndPoint
    * @param message
    */
   override def tell(id: String, message: String): Unit = {
-    actorRegister.getEntry(id).map( someEntry=> {
-      someEntry.map(entry => {
-        val transportPackage = TransportPackage(
-          from=self.id
-          ,to=Some(entry.id)
-          ,tags = None
-          ,id = None
-          ,data = message
-          , `type` = TransportPackage.Type.Message)
-        actorSystem.actorSelection(entry.path) ! TransportPackage.encodeForActor(transportPackage)
-      })
-    })
+    val transportPackage = TransportPackage(
+      from = self.id
+      , to = Some(id)
+      , tags = None
+      , id = None
+      , data = message
+      , `type` = TransportPackage.Type.Message)
+    actorSystem.actorSelection(id) ! TransportPackage.encodeForActor(transportPackage)
   }
   //----------------------------------------------------------------------------
   /**
@@ -246,7 +235,7 @@ final class ServerEndPoint
         , `type` = TransportPackage.Type.Message)
       val serializedPackage = TransportPackage.encodeForActor(transportPackage)
       for (entry <- someEntries)
-        actorSystem.actorSelection(entry.path) ! serializedPackage
+        actorSystem.actorSelection(entry.id) ! serializedPackage
     })
   }
   //----------------------------------------------------------------------------
@@ -260,26 +249,18 @@ final class ServerEndPoint
    */
   override def ask(id: String, request: String,duration: Duration): Future[Response] = {
     val promise = Promise[Response]()
-    timeoutPromises(duration.toMillis,TimeUnit.MILLISECONDS,promise)
-
-    actorRegister.getEntry(id).map(someEntry => {
-      if (someEntry.isDefined) {
-        val requestId = WebSocketSystem.GUID.randomGUID
-        askTable += ((requestId,promise))
-        timeoutPromises(duration.toMillis,TimeUnit.MILLISECONDS,requestId)
-        val entry = someEntry.get
-        val transportPackage = TransportPackage(
-          from = self.id
-          , to = Some(id)
-          , tags = None
-          , id = Some(requestId)
-          , data = request
-          , `type` = TransportPackage.Type.Request)
-        actorSystem.actorSelection(entry.path) ! TransportPackage.encodeForActor(transportPackage)
-      } else {
-        promise.tryFailure(new ActorIdNotFoundException(id))
-      }
-    })
+    timeoutPromises(duration.toMillis, TimeUnit.MILLISECONDS, promise)
+    val requestId = WebSocketSystem.GUID.randomGUID
+    askTable += ((requestId, promise))
+    timeoutPromises(duration.toMillis, TimeUnit.MILLISECONDS, requestId)
+    val transportPackage = TransportPackage(
+      from = self.id
+      , to = Some(id)
+      , tags = None
+      , id = Some(requestId)
+      , data = request
+      , `type` = TransportPackage.Type.Request)
+    actorSystem.actorSelection(id) ! TransportPackage.encodeForActor(transportPackage)
     promise.future
   }
   //----------------------------------------------------------------------------
@@ -313,7 +294,7 @@ final class ServerEndPoint
           , id = Some(requestId)
           , data = request
           , `type` = TransportPackage.Type.Request)
-        actorSystem.actorSelection(entry.path) ! TransportPackage.encodeForActor(transportPackage)
+        actorSystem.actorSelection(entry.id) ! TransportPackage.encodeForActor(transportPackage)
         entryPromise.future
       })
       promise.trySuccess(listFuture)
@@ -343,9 +324,8 @@ final class ServerEndPoint
         , `type` = TransportPackage.Type.Request)
       val serializedData = TransportPackage.encodeForActor(transportPackage)
       for (entry <- entryList)
-        actorSystem.actorSelection(entry.path) ! serializedData
+        actorSystem.actorSelection(entry.id) ! serializedData
     })
-
     promise.future
   }
   //----------------------------------------------------------------------------
