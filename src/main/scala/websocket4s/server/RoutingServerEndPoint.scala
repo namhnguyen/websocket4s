@@ -328,7 +328,8 @@ final class RoutingServerEndPoint
   override def askTags(tags: Set[String], request: String,duration:Duration): Future[Response] = {
     val promise = Promise[Response]()
     val requestId = WebSocketSystem.GUID.randomGUID
-    timeoutPromises(duration.toMillis,TimeUnit.MILLISECONDS,promise)
+    askTable += ((requestId,promise))
+    timeoutPromises(duration.toMillis,TimeUnit.MILLISECONDS,requestId)
     actorRegister.queryEntries(tags).map(entryList => {
       val transportPackage = TransportPackage(
         from = self.id

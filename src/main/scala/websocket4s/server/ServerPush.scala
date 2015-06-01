@@ -3,7 +3,7 @@ package websocket4s.server
 import java.util.concurrent.{TimeoutException, TimeUnit}
 import akka.actor.{Props, Actor, ActorSystem}
 import org.slf4j.LoggerFactory
-import websocket4s.core.{TransportPackage, Response, PushEndPoint, ActorRegister}
+import websocket4s.core._
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.{Promise, Future}
 import scala.concurrent.duration.Duration
@@ -76,7 +76,8 @@ class ServerPush()
    * @param request
    * @return
    */
-  override def ask(id: String, request: String): Future[Response] = ???
+  override def ask(id: String, request: String): Future[Response] =
+    ask(id,request,timeOut)
   //----------------------------------------------------------------------------
   /**
    *
@@ -85,7 +86,21 @@ class ServerPush()
    * @param duration
    * @return
    */
-  override def ask(id: String, request: String, duration: Duration): Future[Response] = ???
+  override def ask(id: String, request: String, duration: Duration): Future[Response] = {
+    val promise = Promise[Response]()
+    val requestId = WebSocketSystem.GUID.randomGUID
+    askTable += ((requestId, promise))
+    timeoutPromises(duration.toMillis, TimeUnit.MILLISECONDS, requestId)
+    val transportPackage = TransportPackage(
+      from = Some(this.id)
+      , to = Some(id)
+      , tags = None
+      , id = Some(requestId)
+      , data = request
+      , `type` = TransportPackage.Type.RouteRequest)
+    actorSystem.actorSelection(id) ! TransportPackage.encodeForActor(transportPackage)
+    promise.future
+  }
   //----------------------------------------------------------------------------
   /**
    * When this EndPoint want to ask something from other EndPoints whose tags are
@@ -94,7 +109,8 @@ class ServerPush()
    * @param request
    * @return
    */
-  override def askTags(tags: Set[String], request: String): Future[Response] = ???
+  override def askTags(tags: Set[String], request: String): Future[Response] =
+    askTags(tags,request,timeOut)
   //----------------------------------------------------------------------------
   /**
    *
@@ -103,7 +119,62 @@ class ServerPush()
    * @param duration
    * @return
    */
-  override def askTags(tags: Set[String], request: String, duration: Duration): Future[Response] = ???
+  override def askTags(tags: Set[String], request: String, duration: Duration): Future[Response] = {
+    val promise = Promise[Response]()
+    val requestId = WebSocketSystem.GUID.randomGUID
+    askTable += ((requestId,promise))
+    timeoutPromises(duration.toMillis,TimeUnit.MILLISECONDS,requestId)
+    actorRegister.queryEntries(tags).map(entryList => {
+      val transportPackage = TransportPackage(
+        from = Some(this.id)
+        , to = None
+        , tags = Some(tags)
+        , id = Some(requestId)
+        , data = request
+        , `type` = TransportPackage.Type.RouteRequest)
+      val serializedData = TransportPackage.encodeForActor(transportPackage)
+      if (transportPackage.from.isDefined){ //from should always be defined, and should never be in the entry
+        val senderId = transportPackage.from.get
+        for (entry <- entryList if !entry.id.equals(senderId))
+          actorSystem.actorSelection(entry.id) ! serializedData
+      } else {
+        for (entry <- entryList)
+          actorSystem.actorSelection(entry.id) ! serializedData
+      }
+    })
+    promise.future
+  }
+  //----------------------------------------------------------------------------
+
+  private def timeoutPromises(timeOut:Long,unit:TimeUnit,keys:String*):Unit =
+    keys.map(key => {
+      askTable.get(key).map( promise =>{
+        WebSocketSystem.scheduler.schedule(new Runnable {
+          override def run(): Unit = {
+            ServerPush.this.askTable -= key
+            promise.tryFailure(timeoutException)
+          }
+        },timeOut,unit)
+      })
+    })
+  //----------------------------------------------------------------------------
+  private def routeResponseReceived(transportPackage: TransportPackage):Unit = {
+    val requestId = transportPackage.id.get
+    val somePromise = askTable.remove(requestId)
+    if (somePromise.isDefined){
+      val promise = somePromise.get
+      val response = Response(
+          ok = transportPackage.error.isEmpty
+        , data = transportPackage.data
+        , endPointId = transportPackage.from
+        , exception = transportPackage.error.map(err => new Exception(err))
+      )
+      if (response.ok)
+        promise.trySuccess(response)
+      else
+        promise.tryFailure(response.exception.get)
+    }
+  }
   //----------------------------------------------------------------------------
   //////////////////////////////////////////////////////////////////////////////
   class PushActor(serverPush: ServerPush) extends Actor {
@@ -115,7 +186,7 @@ class ServerPush()
           val transportPackage = TransportPackage.decodeForActor(data)
           transportPackage.`type` match {
             case TransportPackage.Type.RouteResponse =>
-
+              serverPush.routeResponseReceived(transportPackage)
           }
         } catch {
           case exc:Exception =>  logger.warn(exc.getMessage,exc)

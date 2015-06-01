@@ -13,6 +13,7 @@ import websocket4s.server.RoutingServerEndPoint
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent._
 import scala.concurrent.duration.Duration
+import scala.util.Random
 
 ////////////////////////////////////////////////////////////////////////////////
 /**
@@ -442,7 +443,7 @@ class ScenariosTest extends FunSuite with BeforeAndAfterAll with BeforeAndAfter{
     clientAdapter.close()
   }
   //----------------------------------------------------------------------------
-  test("Test client1 ask client2 with timeout..."){
+  test("Test client1 asks client2 with timeout..."){
     val client1Tag = "client1"
     val client2Tag = "client2"
     val clientAdapter1 = new WebSocketAdapterMemImpl("Client1")
@@ -469,7 +470,8 @@ class ScenariosTest extends FunSuite with BeforeAndAfterAll with BeforeAndAfter{
     clientAdapter1.connect(serverAdapter1)
     clientAdapter2.connect(serverAdapter2)
     val client1Message = "Hello World From EndPoint 1"
-    val futureAnswer = clientEndPoint1.askTags(Set(client2Tag),client1Message,Duration(500,TimeUnit.MILLISECONDS))
+    val futureAnswer = clientEndPoint1
+      .askTags(Set(client2Tag),client1Message,Duration(500,TimeUnit.MILLISECONDS))
     var shouldThrowTimeOutException = false
     try {
       val answer = Await.result(futureAnswer, Duration.Inf)
@@ -479,6 +481,88 @@ class ScenariosTest extends FunSuite with BeforeAndAfterAll with BeforeAndAfter{
     assert(shouldThrowTimeOutException)
     clientAdapter1.close()
     clientAdapter2.close()
+  }
+  //----------------------------------------------------------------------------
+  test("Test a client asks any client for answer..."){
+    val list:IndexedSeq[(WebSocketAdapterMemImpl,WebSocketAdapterMemImpl,ClientEndPoint,Future[Request])]
+      = for(i <- 1 to 10) yield {
+      val clientAdapter = new WebSocketAdapterMemImpl(s"Client$i")
+      val serverAdapter = new WebSocketAdapterMemImpl(s"Server$i")
+      val clientEndPoint = new ClientEndPoint(clientAdapter)
+      val serverEndPoint = new RoutingServerEndPoint(serverAdapter,Set(s"DEV/$i","DEVICES"))
+      val requestReceivedPromise = Promise[Request]()
+      clientEndPoint.onRequestReceived(Some{
+        case request =>
+          requestReceivedPromise.trySuccess(request)
+          Future {
+            blocking{
+              Thread.sleep(50+Random.nextInt(500))
+            }
+            s"reply to request [${request.data}]"
+          }
+      })
+      (clientAdapter,serverAdapter,clientEndPoint,requestReceivedPromise.future)
+    }
+
+    for((clientAdapter,serverAdapter,clientEndPoint,_)<-list){
+      clientAdapter.connect(serverAdapter)
+    }
+
+    val f = list.head._3.askTags(Set("DEVICES"),"give me your status?")
+    val response = Await.result(f,Duration.Inf)
+    assert(response.data === "reply to request [give me your status?]")
+    for((clientAdapter,serverAdapter,clientEndPoint,_)<-list)
+      clientAdapter.close()
+
+  }
+  //----------------------------------------------------------------------------
+  test("Test serverEndpoint1 asks serverEndpoint2..."){
+    val client1Tag = "client1"
+    val client2Tag = "client2"
+    val clientAdapter1 = new WebSocketAdapterMemImpl("Client1")
+    val serverAdapter1 = new WebSocketAdapterMemImpl("Server1")
+    val clientEndPoint1 = new ClientEndPoint(clientAdapter1)
+    val serverEndPoint1 = new RoutingServerEndPoint(serverAdapter1,Set(client1Tag))
+
+    val clientAdapter2 = new WebSocketAdapterMemImpl("Client2")
+    val serverAdapter2 = new WebSocketAdapterMemImpl("Server2")
+    val clientEndPoint2 = new ClientEndPoint(clientAdapter2)
+    val serverEndPoint2 = new RoutingServerEndPoint(serverAdapter2,Set(client2Tag))
+    val serverEndPoint2MessageReceivedPromise = Promise[Message]()
+    serverEndPoint2.onMessageReceived(Some {
+      case message =>
+        serverEndPoint2MessageReceivedPromise.trySuccess(message)
+        println(message)
+    })
+    val serverEndPoint2RequestReceivedPromise = Promise[Request]()
+    serverEndPoint2.onRequestReceived(Some{
+      case request =>
+        serverEndPoint2RequestReceivedPromise.trySuccess(request)
+        Future {
+          println(request)
+          s"reply: [${request.data}]"
+        }
+    })
+    clientAdapter1.connect(serverAdapter1)
+    clientAdapter2.connect(serverAdapter2)
+    Thread.sleep(10)
+    val f1 = serverEndPoint1.askTags(Set(client2Tag),"ask proxy 2?")
+    serverEndPoint1.tellTags(Set(client2Tag),"message")
+
+    val serverEndPoint2MessageReceived = Await.result(
+      serverEndPoint2MessageReceivedPromise.future,Duration.Inf
+    )
+    val serverEndPoint2RequestReceived = Await.result(
+      serverEndPoint2RequestReceivedPromise.future,Duration.Inf
+    )
+
+    val response = Await.result(f1,Duration.Inf)
+    assert(serverEndPoint2MessageReceived.data==="message")
+    assert(serverEndPoint2RequestReceived.data==="ask proxy 2?")
+    assert(response.data=="reply: [ask proxy 2?]")
+    clientAdapter1.close()
+    clientAdapter2.close()
+
   }
   //----------------------------------------------------------------------------
   override def afterAll(): Unit ={
