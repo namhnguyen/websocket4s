@@ -47,14 +47,16 @@ final class ServerEndPoint
   private var messageReceived:Option[(Message)=>Unit] = None
   private var requestReceived:Option[(Request)=>Future[String]] = None
   //----------------------------------------------------------------------------
-  val subscriber = webSocketAdapter.listeners.subscribe(new WebSocketListener {
+  val subscriber = webSocketAdapter.listeners.subscribe(
+    new WebSocketListener {
+    //--------------------------------------------------------------------------
     override def onConnect(): Unit = {
       self.proxyActorRef = Some(self.actorSystem.actorOf(Props(new ProxyActor(self))))
       val id = ServerEndPoint.getActorPath(self.proxyActorRef.get)
       self.actorRegister
         .register(new ActorRegisterEntry(id = id,self.tags))
     }
-
+    //--------------------------------------------------------------------------
     override def onClose(reason: String): Unit = {
       if (self.proxyActorRef.isDefined) {
         val id = ServerEndPoint.getActorPath(self.proxyActorRef.get)
@@ -62,7 +64,7 @@ final class ServerEndPoint
         self.proxyActorRef.map(_ ! PoisonPill)
       }
     }
-
+    //--------------------------------------------------------------------------
     override def receive(dataFrame: String): Unit = {
       try {
         val transportPackage = TransportPackage.decodeForSocket(dataFrame)
@@ -124,7 +126,7 @@ final class ServerEndPoint
         case exc:Exception =>  logger.warn(exc.getMessage,exc)
       }
     }
-
+    //--------------------------------------------------------------------------
     private def sendPackage(transportPackage: TransportPackage):Unit={
       if (transportPackage.to.isDefined){
         val toAddress = transportPackage.to.get
@@ -133,14 +135,22 @@ final class ServerEndPoint
       }else if (transportPackage.tags.isDefined){
         val tags = transportPackage.tags.get
         val transportPackageWithFrom = transportPackage.copy(from = self.id)
+        val serializedData = TransportPackage.encodeForActor(transportPackageWithFrom)
         actorRegister.queryEntries(tags).map(entryList=>
-          entryList.map(entry =>
-            actorSystem.actorSelection(entry.id) ! TransportPackage.encodeForActor(transportPackageWithFrom))
+          if (self.id.isDefined){
+            val selfId = self.id.get
+            for (entry <- entryList if !entry.id.equals(selfId))
+              actorSystem.actorSelection(entry.id) ! serializedData
+          }else {
+            for (entry <- entryList)
+              actorSystem.actorSelection(entry.id) ! serializedData
+          }
         )
       }else {
         logger.warn("Message/Request does not have To address or Tags ! Response won't be sent")
       }
     }
+    //--------------------------------------------------------------------------
   })
   //----------------------------------------------------------------------------
   /**
@@ -361,7 +371,7 @@ final class ServerEndPoint
     promises.map(promise=> {
       WebSocketSystem.scheduler.schedule(new Runnable {
         override def run(): Unit = promise.tryFailure(timeoutException)
-      },timeOut,TimeUnit.SECONDS)
+      },timeOut,unit)
     })
   //----------------------------------------------------------------------------
   private def timeoutPromises(timeOut:Long,unit:TimeUnit,keys:String*):Unit =
@@ -372,7 +382,7 @@ final class ServerEndPoint
             self.askTable -= key
             promise.tryFailure(timeoutException)
           }
-        },timeOut,TimeUnit.SECONDS)
+        },timeOut,unit)
       })
     })
   //----------------------------------------------------------------------------

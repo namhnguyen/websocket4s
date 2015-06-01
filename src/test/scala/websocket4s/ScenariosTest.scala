@@ -1,5 +1,7 @@
 package websocket4s
 
+import java.util.concurrent.TimeUnit
+
 import akka.actor.ActorSystem
 import com.typesafe.config.ConfigFactory
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSuite}
@@ -310,15 +312,21 @@ class ScenariosTest extends FunSuite with BeforeAndAfterAll with BeforeAndAfter{
     val clientEndPoint1Message = "Hello ALL UI!!!"
     clientEndPoint1.tellTags(Set("UI"),clientEndPoint1Message)
 
-    val endPoint1ReceivedMessage=Await.result(
-      endPoint1MessageReceivedPromise.future,Duration.Inf)
+    var endPoint1ShouldNotReceiveBoradcastMessage = false
+    try {
+      val endPoint1ReceivedMessage = Await.result(
+        endPoint1MessageReceivedPromise.future, Duration(1, TimeUnit.SECONDS))
+    }catch{
+      case exc:TimeoutException => endPoint1ShouldNotReceiveBoradcastMessage = true
+    }
+
     val endPoint2ReceivedMessage=Await.result(
       endPoint2MessageReceivedPromise.future,Duration.Inf)
     val endPoint3ReceivedMessage=Await.result(
       endPoint3MessageReceivedPromise.future,Duration.Inf)
 
     //self received
-    assert(endPoint1ReceivedMessage.data===clientEndPoint1Message)
+    assert(endPoint1ShouldNotReceiveBoradcastMessage)
     assert(endPoint2ReceivedMessage.data===clientEndPoint1Message)
     assert(endPoint3ReceivedMessage.data===clientEndPoint1Message)
 
@@ -328,7 +336,149 @@ class ScenariosTest extends FunSuite with BeforeAndAfterAll with BeforeAndAfter{
   }
   //----------------------------------------------------------------------------
   test("Test Change Tags and publish..."){
+    val endPoint1Tag1 = "DEVICE/SN001"
+    val endPoint1Tag2 = "DEVICE"
+    val endPoint1Tag3 = "UI"
 
+    val endPoint2Tag1 = "UI/DEVICE/SN001"
+    val endPoint2Tag2 = "UI"
+
+    val endPoint3Tag1 = "UI/DEVICE/SN002"
+    val endPoint3Tag2 = "UI"
+
+    val clientAdapter1 = new WebSocketAdapterMemImpl("Client1")
+    val serverAdapter1 = new WebSocketAdapterMemImpl("Server1")
+    val clientEndPoint1 = new ClientEndPoint(clientAdapter1)
+    val serverEndPoint1 = new ServerEndPoint(serverAdapter1
+      ,Set(endPoint1Tag1,endPoint1Tag2,endPoint1Tag3))
+    val endPoint1MessageReceivedPromise = Promise[Message]()
+    clientEndPoint1.onMessageReceived(Some{
+      case msg => endPoint1MessageReceivedPromise.trySuccess(msg)
+    })
+
+    val clientAdapter2 = new WebSocketAdapterMemImpl("Client2")
+    val serverAdapter2 = new WebSocketAdapterMemImpl("Server2")
+    val clientEndPoint2 = new ClientEndPoint(clientAdapter2)
+    val serverEndPoint2 = new ServerEndPoint(serverAdapter2
+      ,Set(endPoint2Tag1,endPoint2Tag2))
+    val endPoint2MessageReceivedPromise = Promise[Message]()
+    clientEndPoint2.onMessageReceived(Some{
+      case msg => endPoint2MessageReceivedPromise.trySuccess(msg)
+    })
+
+    val clientAdapter3 = new WebSocketAdapterMemImpl("Client2")
+    val serverAdapter3 = new WebSocketAdapterMemImpl("Server2")
+    val clientEndPoint3 = new ClientEndPoint(clientAdapter3)
+    val serverEndPoint3 = new ServerEndPoint(serverAdapter3
+      ,Set(endPoint3Tag1,endPoint3Tag2))
+    val endPoint3MessageReceivedPromise = Promise[Message]()
+    clientEndPoint3.onMessageReceived(Some{
+      case msg => endPoint3MessageReceivedPromise.trySuccess(msg)
+    })
+
+    clientAdapter1.connect(serverAdapter1)
+    clientAdapter2.connect(serverAdapter2)
+    clientAdapter3.connect(serverAdapter3)
+
+    val clientEndPoint1Message = "Hello ALL UI!!!"
+    serverEndPoint1.changeTags(Set(endPoint1Tag1,endPoint1Tag2))
+    serverEndPoint2.changeTags(Set(endPoint2Tag1))
+    clientEndPoint1.tellTags(Set("UI"),clientEndPoint1Message)
+
+
+    var endPoint2ShouldNotReceiveMessage = false
+    try {
+      val endPoint2ReceivedMessage = Await.result(
+        endPoint2MessageReceivedPromise.future, Duration(1, TimeUnit.SECONDS))
+    }catch{
+      case exc:TimeoutException => endPoint2ShouldNotReceiveMessage = true
+    }
+    val endPoint3ReceivedMessage=Await.result(
+      endPoint3MessageReceivedPromise.future,Duration(1,TimeUnit.SECONDS))
+    var endPoint1ShouldNotReceiveMessage = false
+    try {
+      val endPoint1ReceivedMessage = Await.result(
+        endPoint1MessageReceivedPromise.future, Duration(1, TimeUnit.SECONDS))
+    }catch{
+      case exc:TimeoutException => endPoint1ShouldNotReceiveMessage = true
+    }
+    //self received
+    assert(endPoint1ShouldNotReceiveMessage)
+    assert(endPoint2ShouldNotReceiveMessage) //because it had its tags changed
+    assert(endPoint3ReceivedMessage.data===clientEndPoint1Message)
+
+    clientAdapter1.close()
+    clientAdapter2.close()
+    clientAdapter3.close()
+  }
+  //----------------------------------------------------------------------------
+  test("Test Client asks Server with timeout...") {
+    val clientAdapter = new WebSocketAdapterMemImpl("Client")
+    val serverAdapter = new WebSocketAdapterMemImpl("Server")
+    val clientEndPoint = new ClientEndPoint(clientAdapter)
+    val serverEndPoint = new ServerEndPoint(serverAdapter, Set("BOARD:1125"))
+    val sentMessage = "Hello World"
+
+    serverEndPoint.onRequestReceived(Some {
+      implicit request => Future {
+        //println(s"Server receives request [${request.data}]")
+        blocking {
+          Thread.sleep(1000)
+        }
+        s"I got your question [${request.data}] here is my answer OOOOPS !!!"
+      }
+    })
+    clientAdapter.connect(serverAdapter)
+
+    val ask = s"Hey wsup"
+    var shouldThrowTimeOutException = false
+    val futureAnswer = clientEndPoint.ask(ask,Duration(500,TimeUnit.MILLISECONDS))
+    try {
+      val answer = Await.result(futureAnswer, Duration.Inf)
+    }catch {
+      case exc:TimeoutException => shouldThrowTimeOutException = true
+    }
+    assert(shouldThrowTimeOutException)
+    clientAdapter.close()
+  }
+  //----------------------------------------------------------------------------
+  test("Test client1 ask client2 with timeout..."){
+    val client1Tag = "client1"
+    val client2Tag = "client2"
+    val clientAdapter1 = new WebSocketAdapterMemImpl("Client1")
+    val serverAdapter1 = new WebSocketAdapterMemImpl("Server1")
+    val clientEndPoint1 = new ClientEndPoint(clientAdapter1)
+    val serverEndPoint1 = new ServerEndPoint(serverAdapter1,Set(client1Tag))
+
+    val clientAdapter2 = new WebSocketAdapterMemImpl("Client2")
+    val serverAdapter2 = new WebSocketAdapterMemImpl("Server2")
+    val clientEndPoint2 = new ClientEndPoint(clientAdapter2)
+    val serverEndPoint2 = new ServerEndPoint(serverAdapter2,Set(client2Tag))
+
+    clientEndPoint2.onRequestReceived( Some{
+      case req => {
+        Future{
+          blocking {
+            Thread.sleep(1000)
+          }
+          s"Client 2 responds [${req.data}]"
+        }
+      }
+    })
+
+    clientAdapter1.connect(serverAdapter1)
+    clientAdapter2.connect(serverAdapter2)
+    val client1Message = "Hello World From EndPoint 1"
+    val futureAnswer = clientEndPoint1.askTags(Set(client2Tag),client1Message,Duration(500,TimeUnit.MILLISECONDS))
+    var shouldThrowTimeOutException = false
+    try {
+      val answer = Await.result(futureAnswer, Duration.Inf)
+    }catch {
+      case exc:TimeoutException => shouldThrowTimeOutException = true
+    }
+    assert(shouldThrowTimeOutException)
+    clientAdapter1.close()
+    clientAdapter2.close()
   }
   //----------------------------------------------------------------------------
   override def afterAll(): Unit ={

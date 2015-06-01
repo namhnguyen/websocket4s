@@ -214,7 +214,7 @@ final class ClientEndPoint(webSocketAdapter: WebSocketAdapter) extends EndPoint{
             self.askTable -= key
             promise.tryFailure(timeoutException)
           }
-        },timeOut,TimeUnit.SECONDS)
+        },timeOut,unit)
       })
     })
   //----------------------------------------------------------------------------
