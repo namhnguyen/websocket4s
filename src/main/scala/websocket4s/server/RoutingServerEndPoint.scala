@@ -31,7 +31,7 @@ import scala.concurrent.{Promise, Future}
  *
  * Created by namnguyen on 5/24/15.
  */
-final class ServerEndPoint
+final class RoutingServerEndPoint
   (val webSocketAdapter: WebSocketAdapter,var tags:Set[String] = Set())
   ( implicit val actorSystem: ActorSystem
    ,implicit val actorRegister:ActorRegister
@@ -52,14 +52,14 @@ final class ServerEndPoint
     //--------------------------------------------------------------------------
     override def onConnect(): Unit = {
       self.proxyActorRef = Some(self.actorSystem.actorOf(Props(new ProxyActor(self))))
-      val id = ServerEndPoint.getActorPath(self.proxyActorRef.get)
+      val id = RoutingActorSystem.getActorPath(self.proxyActorRef.get)
       self.actorRegister
         .register(new ActorRegisterEntry(id = id,self.tags))
     }
     //--------------------------------------------------------------------------
     override def onClose(reason: String): Unit = {
       if (self.proxyActorRef.isDefined) {
-        val id = ServerEndPoint.getActorPath(self.proxyActorRef.get)
+        val id = RoutingActorSystem.getActorPath(self.proxyActorRef.get)
         self.actorRegister.unregister(id)
         self.proxyActorRef.map(_ ! PoisonPill)
       }
@@ -165,7 +165,7 @@ final class ServerEndPoint
    * Unique ID.
    * @return
    */
-  def id:Option[String] = proxyActorRef.map(ref => ServerEndPoint.getActorPath(ref)) //proxyActorRef.map(_.path.toString)
+  def id:Option[String] = proxyActorRef.map(ref => RoutingActorSystem.getActorPath(ref)) //proxyActorRef.map(_.path.toString)
   //----------------------------------------------------------------------------
   /**
    * If EndPoint already connect to other EndPoint, it will update the actorRegister
@@ -244,8 +244,14 @@ final class ServerEndPoint
         ,data = message
         , `type` = TransportPackage.Type.Message)
       val serializedPackage = TransportPackage.encodeForActor(transportPackage)
-      for (entry <- someEntries)
-        actorSystem.actorSelection(entry.id) ! serializedPackage
+      if (transportPackage.from.isDefined) {
+        val senderId = transportPackage.from.get
+        for (entry <- someEntries if !entry.id.equals(senderId))
+          actorSystem.actorSelection(entry.id) ! serializedPackage
+      }else {
+        for (entry <- someEntries)
+          actorSystem.actorSelection(entry.id) ! serializedPackage
+      }
     })
   }
   //----------------------------------------------------------------------------
@@ -259,7 +265,6 @@ final class ServerEndPoint
    */
   override def ask(id: String, request: String,duration: Duration): Future[Response] = {
     val promise = Promise[Response]()
-    timeoutPromises(duration.toMillis, TimeUnit.MILLISECONDS, promise)
     val requestId = WebSocketSystem.GUID.randomGUID
     askTable += ((requestId, promise))
     timeoutPromises(duration.toMillis, TimeUnit.MILLISECONDS, requestId)
@@ -292,7 +297,7 @@ final class ServerEndPoint
     },duration.toMillis,TimeUnit.MILLISECONDS)
 
     actorRegister.queryEntries(tags).map(entryList=>{
-      val listFuture = entryList.map(entry=>{
+      val listFuture = entryList.filter(entry => !entry.id.equals(self.id.get)).map(entry=>{
         val requestId = WebSocketSystem.GUID.randomGUID
         val entryPromise = Promise[Response]()
         askTable += ((requestId,entryPromise))
@@ -333,8 +338,14 @@ final class ServerEndPoint
         , data = request
         , `type` = TransportPackage.Type.Request)
       val serializedData = TransportPackage.encodeForActor(transportPackage)
-      for (entry <- entryList)
-        actorSystem.actorSelection(entry.id) ! serializedData
+      if (transportPackage.from.isDefined){
+        val senderId = transportPackage.from.get
+        for (entry <- entryList if !entry.id.equals(senderId))
+          actorSystem.actorSelection(entry.id) ! serializedData
+      } else {
+        for (entry <- entryList)
+          actorSystem.actorSelection(entry.id) ! serializedData
+      }
     })
     promise.future
   }
@@ -467,7 +478,7 @@ final class ServerEndPoint
     }
   //----------------------------------------------------------------------------
   ////////////////////////////////////////////////////////////////////////////////
-  class ProxyActor(serverEndPoint: ServerEndPoint) extends Actor{
+  class ProxyActor(serverEndPoint: RoutingServerEndPoint) extends Actor{
     private val logger = LoggerFactory.getLogger(this.getClass)
     //----------------------------------------------------------------------------
     override def receive = {
@@ -513,16 +524,4 @@ final class ServerEndPoint
   //////////////////////////////////////////////////////////////////////////////
 }
 ////////////////////////////////////////////////////////////////////////////////
-object ServerEndPoint{
-  def getServerPath()(implicit actorSystem:ActorSystem)=
-    AkkaSystemExt(actorSystem).address
 
-  def getActorPath(actorRef: ActorRef)(implicit actorSystem:ActorSystem):String =
-    actorRef.path.toStringWithAddress(getServerPath())
-
-}
-////////////////////////////////////////////////////////////////////////////////
-class AkkaSystemExtImpl(system:ExtendedActorSystem) extends Extension{
-  def address = system.provider.getDefaultAddress
-}
-object AkkaSystemExt extends ExtensionKey[AkkaSystemExtImpl]

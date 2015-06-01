@@ -2,7 +2,7 @@ package websocket4s
 
 import akka.actor.{Props, Actor, ActorSystem}
 import com.typesafe.config.{ConfigValueFactory, ConfigFactory}
-import websocket4s.server.ServerEndPoint
+import websocket4s.server.RoutingActorSystem
 
 /**
  * Created by namnguyen on 5/22/15.
@@ -51,8 +51,8 @@ object Main extends App{
   }
 
   val actor1 = system.actorOf(Props[ActorA])
-  println(ServerEndPoint.getServerPath())
-  println(ServerEndPoint.getActorPath(actor1))
+  println(RoutingActorSystem.getServerPath())
+  println(RoutingActorSystem.getActorPath(actor1))
 }
 
 class ActorA extends Actor {

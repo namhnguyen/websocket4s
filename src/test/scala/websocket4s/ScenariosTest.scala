@@ -9,7 +9,7 @@ import org.slf4j.LoggerFactory
 import websocket4s.client.ClientEndPoint
 import websocket4s.core.{Response, Request, Message, ActorRegisterMemoryImpl}
 import websocket4s.mock.WebSocketAdapterMemImpl
-import websocket4s.server.ServerEndPoint
+import websocket4s.server.RoutingServerEndPoint
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent._
 import scala.concurrent.duration.Duration
@@ -51,12 +51,12 @@ class ScenariosTest extends FunSuite with BeforeAndAfterAll with BeforeAndAfter{
   //----------------------------------------------------------------------------
   before{
     //clean up before each test
-    println("Before")
+    //println("Before")
   }
   //----------------------------------------------------------------------------
   after {
     //clean up after each test
-    println("After")
+    //println("After")
   }
   //----------------------------------------------------------------------------
   test("Test a client asks server directly (No Routing)..."){
@@ -64,7 +64,7 @@ class ScenariosTest extends FunSuite with BeforeAndAfterAll with BeforeAndAfter{
     val clientAdapter = new WebSocketAdapterMemImpl("Client")
     val serverAdapter = new WebSocketAdapterMemImpl("Server")
     val clientEndPoint = new ClientEndPoint(clientAdapter)
-    val serverEndPoint = new ServerEndPoint(serverAdapter,Set("BOARD:1125"))
+    val serverEndPoint = new RoutingServerEndPoint(serverAdapter,Set("BOARD:1125"))
     val sentMessage = "Hello World"
     val testPromise = Promise[Boolean]()
     serverEndPoint.onMessageReceived(Some {
@@ -114,12 +114,12 @@ class ScenariosTest extends FunSuite with BeforeAndAfterAll with BeforeAndAfter{
     val clientAdapter1 = new WebSocketAdapterMemImpl("Client1")
     val serverAdapter1 = new WebSocketAdapterMemImpl("Server1")
     val clientEndPoint1 = new ClientEndPoint(clientAdapter1)
-    val serverEndPoint1 = new ServerEndPoint(serverAdapter1,Set(client1Tag))
+    val serverEndPoint1 = new RoutingServerEndPoint(serverAdapter1,Set(client1Tag))
 
     val clientAdapter2 = new WebSocketAdapterMemImpl("Client2")
     val serverAdapter2 = new WebSocketAdapterMemImpl("Server2")
     val clientEndPoint2 = new ClientEndPoint(clientAdapter2)
-    val serverEndPoint2 = new ServerEndPoint(serverAdapter2,Set(client2Tag))
+    val serverEndPoint2 = new RoutingServerEndPoint(serverAdapter2,Set(client2Tag))
 
     val client1MessageReceivedPromise = Promise[Message]()
     val client1RequestReceivedPromise = Promise[Request]()
@@ -207,12 +207,12 @@ class ScenariosTest extends FunSuite with BeforeAndAfterAll with BeforeAndAfter{
     val clientAdapter1 = new WebSocketAdapterMemImpl("Client1")
     val serverAdapter1 = new WebSocketAdapterMemImpl("Server1")
     val clientEndPoint1 = new ClientEndPoint(clientAdapter1)
-    val serverEndPoint1 = new ServerEndPoint(serverAdapter1)
+    val serverEndPoint1 = new RoutingServerEndPoint(serverAdapter1)
 
     val clientAdapter2 = new WebSocketAdapterMemImpl("Client2")
     val serverAdapter2 = new WebSocketAdapterMemImpl("Server2")
     val clientEndPoint2 = new ClientEndPoint(clientAdapter2)
-    val serverEndPoint2 = new ServerEndPoint(serverAdapter2)
+    val serverEndPoint2 = new RoutingServerEndPoint(serverAdapter2)
     val endPoint1MessageReceivedPromise = Promise[Message]()
 
     clientEndPoint1.onMessageReceived(Some{
@@ -235,12 +235,12 @@ class ScenariosTest extends FunSuite with BeforeAndAfterAll with BeforeAndAfter{
     val clientAdapter1 = new WebSocketAdapterMemImpl("Client1")
     val serverAdapter1 = new WebSocketAdapterMemImpl("Server1")
     val clientEndPoint1 = new ClientEndPoint(clientAdapter1)
-    val serverEndPoint1 = new ServerEndPoint(serverAdapter1)
+    val serverEndPoint1 = new RoutingServerEndPoint(serverAdapter1)
 
     val clientAdapter2 = new WebSocketAdapterMemImpl("Client2")
     val serverAdapter2 = new WebSocketAdapterMemImpl("Server2")
     val clientEndPoint2 = new ClientEndPoint(clientAdapter2)
-    val serverEndPoint2 = new ServerEndPoint(serverAdapter2)
+    val serverEndPoint2 = new RoutingServerEndPoint(serverAdapter2)
     val endPoint1RequestReceivedPromise = Promise[Request]()
 
     clientEndPoint1.onRequestReceived(Some{
@@ -279,7 +279,7 @@ class ScenariosTest extends FunSuite with BeforeAndAfterAll with BeforeAndAfter{
     val clientAdapter1 = new WebSocketAdapterMemImpl("Client1")
     val serverAdapter1 = new WebSocketAdapterMemImpl("Server1")
     val clientEndPoint1 = new ClientEndPoint(clientAdapter1)
-    val serverEndPoint1 = new ServerEndPoint(serverAdapter1
+    val serverEndPoint1 = new RoutingServerEndPoint(serverAdapter1
       ,Set(endPoint1Tag1,endPoint1Tag2,endPoint1Tag3))
     val endPoint1MessageReceivedPromise = Promise[Message]()
     clientEndPoint1.onMessageReceived(Some{
@@ -289,7 +289,7 @@ class ScenariosTest extends FunSuite with BeforeAndAfterAll with BeforeAndAfter{
     val clientAdapter2 = new WebSocketAdapterMemImpl("Client2")
     val serverAdapter2 = new WebSocketAdapterMemImpl("Server2")
     val clientEndPoint2 = new ClientEndPoint(clientAdapter2)
-    val serverEndPoint2 = new ServerEndPoint(serverAdapter2
+    val serverEndPoint2 = new RoutingServerEndPoint(serverAdapter2
       ,Set(endPoint2Tag1,endPoint2Tag2))
     val endPoint2MessageReceivedPromise = Promise[Message]()
     clientEndPoint2.onMessageReceived(Some{
@@ -299,7 +299,7 @@ class ScenariosTest extends FunSuite with BeforeAndAfterAll with BeforeAndAfter{
     val clientAdapter3 = new WebSocketAdapterMemImpl("Client2")
     val serverAdapter3 = new WebSocketAdapterMemImpl("Server2")
     val clientEndPoint3 = new ClientEndPoint(clientAdapter3)
-    val serverEndPoint3 = new ServerEndPoint(serverAdapter3
+    val serverEndPoint3 = new RoutingServerEndPoint(serverAdapter3
       ,Set(endPoint3Tag1,endPoint3Tag2))
     val endPoint3MessageReceivedPromise = Promise[Message]()
     clientEndPoint3.onMessageReceived(Some{
@@ -349,7 +349,7 @@ class ScenariosTest extends FunSuite with BeforeAndAfterAll with BeforeAndAfter{
     val clientAdapter1 = new WebSocketAdapterMemImpl("Client1")
     val serverAdapter1 = new WebSocketAdapterMemImpl("Server1")
     val clientEndPoint1 = new ClientEndPoint(clientAdapter1)
-    val serverEndPoint1 = new ServerEndPoint(serverAdapter1
+    val serverEndPoint1 = new RoutingServerEndPoint(serverAdapter1
       ,Set(endPoint1Tag1,endPoint1Tag2,endPoint1Tag3))
     val endPoint1MessageReceivedPromise = Promise[Message]()
     clientEndPoint1.onMessageReceived(Some{
@@ -359,7 +359,7 @@ class ScenariosTest extends FunSuite with BeforeAndAfterAll with BeforeAndAfter{
     val clientAdapter2 = new WebSocketAdapterMemImpl("Client2")
     val serverAdapter2 = new WebSocketAdapterMemImpl("Server2")
     val clientEndPoint2 = new ClientEndPoint(clientAdapter2)
-    val serverEndPoint2 = new ServerEndPoint(serverAdapter2
+    val serverEndPoint2 = new RoutingServerEndPoint(serverAdapter2
       ,Set(endPoint2Tag1,endPoint2Tag2))
     val endPoint2MessageReceivedPromise = Promise[Message]()
     clientEndPoint2.onMessageReceived(Some{
@@ -369,7 +369,7 @@ class ScenariosTest extends FunSuite with BeforeAndAfterAll with BeforeAndAfter{
     val clientAdapter3 = new WebSocketAdapterMemImpl("Client2")
     val serverAdapter3 = new WebSocketAdapterMemImpl("Server2")
     val clientEndPoint3 = new ClientEndPoint(clientAdapter3)
-    val serverEndPoint3 = new ServerEndPoint(serverAdapter3
+    val serverEndPoint3 = new RoutingServerEndPoint(serverAdapter3
       ,Set(endPoint3Tag1,endPoint3Tag2))
     val endPoint3MessageReceivedPromise = Promise[Message]()
     clientEndPoint3.onMessageReceived(Some{
@@ -416,7 +416,7 @@ class ScenariosTest extends FunSuite with BeforeAndAfterAll with BeforeAndAfter{
     val clientAdapter = new WebSocketAdapterMemImpl("Client")
     val serverAdapter = new WebSocketAdapterMemImpl("Server")
     val clientEndPoint = new ClientEndPoint(clientAdapter)
-    val serverEndPoint = new ServerEndPoint(serverAdapter, Set("BOARD:1125"))
+    val serverEndPoint = new RoutingServerEndPoint(serverAdapter, Set("BOARD:1125"))
     val sentMessage = "Hello World"
 
     serverEndPoint.onRequestReceived(Some {
@@ -448,12 +448,12 @@ class ScenariosTest extends FunSuite with BeforeAndAfterAll with BeforeAndAfter{
     val clientAdapter1 = new WebSocketAdapterMemImpl("Client1")
     val serverAdapter1 = new WebSocketAdapterMemImpl("Server1")
     val clientEndPoint1 = new ClientEndPoint(clientAdapter1)
-    val serverEndPoint1 = new ServerEndPoint(serverAdapter1,Set(client1Tag))
+    val serverEndPoint1 = new RoutingServerEndPoint(serverAdapter1,Set(client1Tag))
 
     val clientAdapter2 = new WebSocketAdapterMemImpl("Client2")
     val serverAdapter2 = new WebSocketAdapterMemImpl("Server2")
     val clientEndPoint2 = new ClientEndPoint(clientAdapter2)
-    val serverEndPoint2 = new ServerEndPoint(serverAdapter2,Set(client2Tag))
+    val serverEndPoint2 = new RoutingServerEndPoint(serverAdapter2,Set(client2Tag))
 
     clientEndPoint2.onRequestReceived( Some{
       case req => {
