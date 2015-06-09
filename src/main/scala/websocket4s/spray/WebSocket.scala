@@ -157,7 +157,8 @@ abstract class WebSocketComboWorker(
 
   // headers may be useful for authentication and such
   var headers: List[HttpHeader] = _
-
+  //Store URI in case each connection can connect to different URI
+  var uri: Uri = _
   private var maskingKey: Array[Byte] = _
 
   // from upstream
@@ -174,8 +175,10 @@ abstract class WebSocketComboWorker(
           sender() ! wsFailure.response
         case wsContext: websocket.HandshakeContext =>
           headers = wsContext.request.headers
+          uri = wsContext.request.uri
           // https://github.com/wandoulabs/spray-websocket/issues/69
           maskingKey = Array.empty[Byte]
+          //perform authentication/authorization here if needed
           sender() ! UHttp.UpgradeServer(websocket.pipelineStage(self, wsContext), wsContext.response)
       }
 
