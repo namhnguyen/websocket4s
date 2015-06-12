@@ -131,7 +131,7 @@ abstract class WebSocketClient(
   def userHeaders: List[HttpHeader] = Nil
 
   def upgradeRequest = HttpRequest(
-    HttpMethods.GET, path,
+    HttpMethods.GET, Uri.from(path=path),
     HttpHeaders.Host(host, port) :: WebSocketUpgradeHeaders ::: userHeaders
   )
 
@@ -158,7 +158,7 @@ abstract class WebSocketComboWorker(
   // headers may be useful for authentication and such
   var headers: List[HttpHeader] = _
   //Store URI in case each connection can connect to different URI
-  var uri: Uri = _
+  var path: String = _
   private var maskingKey: Array[Byte] = _
 
   // from upstream
@@ -175,7 +175,7 @@ abstract class WebSocketComboWorker(
           sender() ! wsFailure.response
         case wsContext: websocket.HandshakeContext =>
           headers = wsContext.request.headers
-          uri = wsContext.request.uri
+          path = wsContext.request.uri.authority.host.address
           // https://github.com/wandoulabs/spray-websocket/issues/69
           maskingKey = Array.empty[Byte]
           //perform authentication/authorization here if needed

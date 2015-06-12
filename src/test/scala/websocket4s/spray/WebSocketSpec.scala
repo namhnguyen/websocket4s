@@ -74,6 +74,26 @@ class WebSocketSpec extends AkkaWordSpec {
       assert(got == Big, s"got ${got.take(100)}")
     }
 
+    "client connect to websocket server on different URI" in {
+      val client = newClient("test")
+      watch(client)
+
+      fishForMessage() {
+        case UpgradedToWebSocket => true
+        case _ => false
+      }
+
+      //this message should not be received
+      client ! TextFrame("test")
+
+      fishForMessage() {
+        case Terminated(actor) if actor == client => true
+        case _ => false
+      }
+      //system.stop(server)
+
+    }
+
     // must be last test -- we're stopping the test server
     "client actor stop when the server stops" in {
       val client = newClient()
@@ -91,18 +111,7 @@ class WebSocketSpec extends AkkaWordSpec {
       }
     }
 
-    "client connect to websocket server on different URI" in {
-      val client = newClient("test")
-      watch(client)
 
-      //client ! UpgradedToWebSocket
-      fishForMessage() {
-        case UpgradedToWebSocket => true
-        case _ => false
-      }
-      system.stop(server)
-
-    }
 
   }
 
@@ -129,7 +138,7 @@ class WebSocketSpec extends AkkaWordSpec {
   }
 
   def newClient(): ActorRef = system.actorOf(Props(
-    classOf[TestClient], testActor, host, port
+    classOf[TestClient], testActor, host, port , "/"
   ))
 
   def newClient(path:String):ActorRef = system.actorOf(Props(
@@ -163,8 +172,13 @@ object WebSocketSpec {
     extends SimpleWebSocketComboWorker(conn) {
     val websockets: Receive = LoggingReceive {
       case UpgradedToWebSocket =>
-        println("uri:"+this.uri)
-        println("Server: Upgraded to Web Socket!!!")
+        if (this.path == "test") {
+          println("Test path close")
+          send(Close)
+        } else {
+          println("Request Path:" + this.path)
+          println("Server: Upgraded to Web Socket!!!")
+        }
       case Ping =>
         testActor ! Ping
         sendWithAck(Pong)
@@ -202,6 +216,7 @@ object WebSocketSpec {
         testActor ! UpgradedToWebSocket
         connection ! Ping
       case Close =>
+        println("I am closed")
         connection ! Close
 
       case Pong =>
