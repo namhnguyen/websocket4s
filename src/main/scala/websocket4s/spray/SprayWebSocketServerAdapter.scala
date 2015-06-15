@@ -12,7 +12,7 @@ abstract class SprayWebSocketServerAdapter(conn:ActorRef)
   extends SimpleWebSocketComboWorker(conn) with WebSocketAdapter{
 
   private val _listeners = new WebSocketListeners()
-  val closeFrame = CloseFrame()
+  private val closeFrame = CloseFrame()
   //Route will be implemented
   //override def route: Route = ???
 
