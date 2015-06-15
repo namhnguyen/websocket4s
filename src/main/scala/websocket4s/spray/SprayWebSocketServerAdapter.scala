@@ -1,6 +1,7 @@
 package websocket4s.spray
 
 import akka.actor.{PoisonPill, ActorRef}
+import spray.can.websocket.UpgradedToWebSocket
 import spray.can.websocket.frame.{CloseFrame, TextFrame}
 import websocket4s.core.{WebSocketListeners, WebSocketAdapter}
 ////////////////////////////////////////////////////////////////////////////////
@@ -24,7 +25,19 @@ abstract class SprayWebSocketServerAdapter(conn:ActorRef)
     self ! PoisonPill
   }
 
+  override def postStop():Unit = {
+    super.postStop()
+    for (listener <- listeners) listener.onClose("WebSocket Server Connection Kill")
+  }
   /** User-defined websocket handler. */
-  override def websockets: Receive = ???
+  override def websockets: Receive = {
+    case UpgradedToWebSocket =>
+      for( listener <- listeners) listener.onConnect()
+
+    case textFrame:String =>
+      for (listener <- listeners) listener.receive(textFrame)
+
+
+  }
 }
 ////////////////////////////////////////////////////////////////////////////////
