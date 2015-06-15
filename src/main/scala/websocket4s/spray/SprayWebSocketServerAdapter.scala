@@ -34,9 +34,8 @@ abstract class SprayWebSocketServerAdapter(conn:ActorRef)
     case UpgradedToWebSocket =>
       for( listener <- listeners) listener.onConnect()
 
-    case textFrame:String =>
-      for (listener <- listeners) listener.receive(textFrame)
-
+    case textFrame:TextFrame =>
+      for (listener <- listeners) listener.receive(textFrame.payload.utf8String)
 
   }
 }
