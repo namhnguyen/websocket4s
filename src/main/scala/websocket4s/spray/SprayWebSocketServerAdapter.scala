@@ -28,14 +28,17 @@ abstract class SprayWebSocketServerAdapter(conn:ActorRef)
   override def postStop():Unit = {
     super.postStop()
     for (listener <- listeners) listener.onClose("WebSocket Server Connection Kill")
+    //println("server close")
   }
   /** User-defined websocket handler. */
   override def websockets: Receive = {
     case UpgradedToWebSocket =>
       for( listener <- listeners) listener.onConnect()
 
-    case textFrame:TextFrame =>
-      for (listener <- listeners) listener.receive(textFrame.payload.utf8String)
+    case textFrame:TextFrame => {
+      val payLoadText = textFrame.payload.utf8String
+      for (listener <- listeners) listener.receive(payLoadText)
+    }
 
   }
 }

@@ -11,7 +11,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 /**
  * Created by namnguyen on 5/24/15.
  */
-final class ClientEndPoint(webSocketAdapter: WebSocketAdapter) extends EndPoint{
+final class ClientEndPoint(val webSocketAdapter: WebSocketAdapter) extends EndPoint{
   self =>
   //----------------------------------------------------------------------------
   private val logger = LoggerFactory.getLogger(this.getClass)

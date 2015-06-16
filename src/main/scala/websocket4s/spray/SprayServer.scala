@@ -7,9 +7,9 @@ import spray.can.websocket.UpgradedToWebSocket
 import spray.can.websocket.frame.TextFrame
 import spray.routing.Route
 import websocket4s.client.ClientEndPoint
-import websocket4s.core.{WebSocketAdapter, ActorRegisterMemoryImpl}
-import websocket4s.server.{RoutingServerEndPoint, RoutingActorSystem}
-
+import websocket4s.core.{WebSocketListener, ActorRegisterMemoryImpl}
+import websocket4s.server.RoutingServerEndPoint
+import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent._
 import scala.concurrent.duration._
 ////////////////////////////////////////////////////////////////////////////////
@@ -39,17 +39,47 @@ object SprayServer {
   ////////////////////////////////////////////////////////////////////////////////
   def runClient(): Unit = {
     val client = new ClientEndPoint(new SprayWebSocketClientAdapter("127.0.0.1", 8080,"/"))
+    client.webSocketAdapter.listeners.subscribe(new WebSocketListener {
+      override def onConnect(): Unit = println("Client Connect")
+
+      override def onClose(reason: String): Unit = println("Client Close")
+
+      override def receive(dataFrame: String): Unit = println(s"Client receives [$dataFrame]")
+    })
     Thread.sleep(1000)
     println("Send message")
     client.tell("Hello world")
+    println("Ask Question")
+    val futureResponse = client.ask("Give me some answer")
+    val response = Await.result(futureResponse,Duration.Inf)
+    println(response)
+    client.webSocketAdapter.close()
   }
 
   ////////////////////////////////////////////////////////////////////////////////
   class RouterAdapter(conn: ActorRef) extends SprayWebSocketServerAdapter(conn) {
+    listeners.subscribe(new WebSocketListener {
+      override def onConnect(): Unit = println("Server open connection")
+
+      override def onClose(reason: String): Unit = println("Server close connection")
+
+      override def receive(dataFrame: String): Unit = println(s"Server receives [$dataFrame]")
+    })
     val serverEndPoint = new RoutingServerEndPoint(this, Set("UI"))
-    serverEndPoint.onMessageReceived(Some({
+//    val schedule = WebSocketSystem.scheduler.schedule(new Runnable {
+//      override def run(): Unit = serverEndPoint.webSocketAdapter.close()
+//    },5,TimeUnit.SECONDS)
+
+    serverEndPoint.onMessageReceived(Some{
       implicit message => println(message.data)
-    }))
+    })
+
+    serverEndPoint.onRequestReceived(Some {
+      implicit request =>
+      Future {
+        s"Reply from Server for: ${request.data}"
+      }
+    })
 
     override def route: Route = path("hello") {
       get {
