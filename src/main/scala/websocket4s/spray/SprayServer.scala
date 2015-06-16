@@ -1,5 +1,7 @@
 package websocket4s.spray
 
+import java.util.concurrent.TimeUnit
+
 import akka.actor.{ActorSystem, Props, ActorRef}
 import akka.io.Tcp
 import akka.util.Timeout
@@ -7,7 +9,7 @@ import spray.can.websocket.UpgradedToWebSocket
 import spray.can.websocket.frame.TextFrame
 import spray.routing.Route
 import websocket4s.client.ClientEndPoint
-import websocket4s.core.{WebSocketListener, ActorRegisterMemoryImpl}
+import websocket4s.core.{WebSocketSystem, WebSocketListener, ActorRegisterMemoryImpl}
 import websocket4s.server.RoutingServerEndPoint
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent._
@@ -22,6 +24,11 @@ object SprayServer {
   implicit val registerTable = new ActorRegisterMemoryImpl()
   ////////////////////////////////////////////////////////////////////////////////
   def main(args: Array[String]): Unit = {
+    runServer()
+    //runClient()
+  }
+  ////////////////////////////////////////////////////////////////////////////////
+  def runServer(): Unit ={
     val workerProps = (conn: ActorRef) =>
       Props(classOf[RouterAdapter], conn)
     implicit val timeout = Timeout(2 second)
@@ -34,11 +41,10 @@ object SprayServer {
     println(address.getHostName)
     println(address.getPort)
     Thread.sleep(1000)
-    runClient()
   }
   ////////////////////////////////////////////////////////////////////////////////
   def runClient(): Unit = {
-    val client = new ClientEndPoint(new SprayWebSocketClientAdapter("127.0.0.1", 8080,"/"))
+    val client = new ClientEndPoint(new SprayWebSocketClientAdapter("127.0.0.1", 8080,"/",true))
     client.webSocketAdapter.listeners.subscribe(new WebSocketListener {
       override def onConnect(): Unit = println("Client Connect")
 
@@ -47,13 +53,13 @@ object SprayServer {
       override def receive(dataFrame: String): Unit = println(s"Client receives [$dataFrame]")
     })
     Thread.sleep(1000)
-    println("Send message")
-    client.tell("Hello world")
-    println("Ask Question")
-    val futureResponse = client.ask("Give me some answer")
-    val response = Await.result(futureResponse,Duration.Inf)
-    println(response)
-    client.webSocketAdapter.close()
+    WebSocketSystem.scheduler.scheduleWithFixedDelay(new Runnable {
+      override def run(): Unit = {
+        val futureResponse = client.ask("how are you??")
+        futureResponse.onSuccess{ case response => println(response.data) }
+      }
+    },0,1000,TimeUnit.MILLISECONDS)
+    //client.webSocketAdapter.close()
   }
 
   ////////////////////////////////////////////////////////////////////////////////
