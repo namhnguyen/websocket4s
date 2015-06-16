@@ -86,5 +86,7 @@ class ActorRegisterMemoryImpl() extends ActorRegister{
   def printAll(): Unit ={
     register.map { case (k,v) => println(v)}
   }
+
+  def size = register.size
 }
 ////////////////////////////////////////////////////////////////////////////////

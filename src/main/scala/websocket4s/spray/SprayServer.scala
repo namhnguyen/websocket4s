@@ -25,7 +25,9 @@ object SprayServer {
   ////////////////////////////////////////////////////////////////////////////////
   def main(args: Array[String]): Unit = {
     runServer()
-    //runClient()
+//    Thread.sleep(1000)
+//    for(i <- 1 to 50)
+//      runClient(s"Client $i")
   }
   ////////////////////////////////////////////////////////////////////////////////
   def runServer(): Unit ={
@@ -43,31 +45,36 @@ object SprayServer {
     Thread.sleep(1000)
   }
   ////////////////////////////////////////////////////////////////////////////////
-  def runClient(): Unit = {
+  def runClient(name:String): Unit = {
     val client = new ClientEndPoint(new SprayWebSocketClientAdapter("127.0.0.1", 8080,"/",true))
     client.webSocketAdapter.listeners.subscribe(new WebSocketListener {
-      override def onConnect(): Unit = println("Client Connect")
+      override def onConnect(): Unit = println(s"Client [$name] Connect")
 
-      override def onClose(reason: String): Unit = println("Client Close")
+      override def onClose(reason: String): Unit = println(s"Client [$name] Close")
 
-      override def receive(dataFrame: String): Unit = println(s"Client receives [$dataFrame]")
+      override def receive(dataFrame: String): Unit = println(s"Client [$name] receives [$dataFrame]")
     })
-    Thread.sleep(1000)
     WebSocketSystem.scheduler.scheduleWithFixedDelay(new Runnable {
       override def run(): Unit = {
-        val futureResponse = client.ask("how are you??")
+        val futureResponse = client.ask(s"Client [$name]: how are you??")
         futureResponse.onSuccess{ case response => println(response.data) }
       }
-    },0,1000,TimeUnit.MILLISECONDS)
+    },1000,1000,TimeUnit.MILLISECONDS)
     //client.webSocketAdapter.close()
   }
 
   ////////////////////////////////////////////////////////////////////////////////
   class RouterAdapter(conn: ActorRef) extends SprayWebSocketServerAdapter(conn) {
     listeners.subscribe(new WebSocketListener {
-      override def onConnect(): Unit = println("Server open connection")
+      override def onConnect(): Unit = {
+        println("Server open connection")
+        println(s"Register Table Size [${registerTable.size}]")
+      }
 
-      override def onClose(reason: String): Unit = println("Server close connection")
+      override def onClose(reason: String): Unit = {
+        println("Server close connection")
+        println(s"Register Table Size [${registerTable.size}]")
+      }
 
       override def receive(dataFrame: String): Unit = println(s"Server receives [$dataFrame]")
     })
