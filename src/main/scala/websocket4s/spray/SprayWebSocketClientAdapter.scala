@@ -21,7 +21,10 @@ class SprayWebSocketClientAdapter
 )(implicit actorSystem:ActorSystem)
   extends WebSocketAdapter{ self =>
   //----------------------------------------------------------------------------
-  private val _retryDelay = Duration(5,TimeUnit.SECONDS)
+  private val _initRetryDelay = 5000
+  private val _retryBackupFactor = 1.5
+  private val _retryDelayMax = 30000
+  private var _currentRetryDelay = _initRetryDelay
   private var _purposelyClose = false
   private val _listeners = new WebSocketListeners()
   private val _webSocketListener = listeners.subscribe(new WebSocketListener{
@@ -40,8 +43,11 @@ class SprayWebSocketClientAdapter
           override def run(): Unit = {
             _client = actorSystem.actorOf(
                 Props(classOf[ClientWorker],host,port,path,self))
+            _currentRetryDelay = (_currentRetryDelay * _retryBackupFactor).toInt
+            if (_currentRetryDelay > _retryDelayMax) _currentRetryDelay = _retryDelayMax
+            println(_currentRetryDelay)
           }
-        },_retryDelay.toMillis,TimeUnit.MILLISECONDS)
+        },_currentRetryDelay,TimeUnit.MILLISECONDS)
       }
     }
     //--------------------------------------------------------------------------
@@ -53,6 +59,10 @@ class SprayWebSocketClientAdapter
   val bufferActor = actorSystem.actorOf(Props[BufferActor])
   private var _client = actorSystem.actorOf(
     Props(classOf[ClientWorker],host,port,path,this))
+  //--------------------------------------------------------------------------
+  def resetRetryTime(): Unit = {
+    _currentRetryDelay = _initRetryDelay
+  }
   //----------------------------------------------------------------------------
   override def push(dataFrame: String): Unit =
     bufferActor ! TextFrame(dataFrame)
@@ -91,6 +101,7 @@ class ClientWorker(host:String,port:Int,path:String,adapter: SprayWebSocketClien
   override def websockets: Receive = {
     case UpgradedToWebSocket => {
       //send the connection to the adapter.bufferActor to handle sending messages
+      adapter.resetRetryTime()
       adapter.bufferActor ! this.connection
       for (listener <- adapter.listeners) listener.onConnect()
     }

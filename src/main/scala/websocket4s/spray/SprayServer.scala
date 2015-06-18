@@ -25,6 +25,7 @@ object SprayServer {
   ////////////////////////////////////////////////////////////////////////////////
   def main(args: Array[String]): Unit = {
     runServer()
+    //runClient()
 //    Thread.sleep(1000)
 //    for(i <- 1 to 50)
 //      runClient(s"Client $i")
@@ -43,6 +44,10 @@ object SprayServer {
     println(address.getHostName)
     println(address.getPort)
     Thread.sleep(1000)
+  }
+  ////////////////////////////////////////////////////////////////////////////////
+  def runClient(): Unit = {
+    val client = new ClientEndPoint(new SprayWebSocketClientAdapter("127.0.0.1", 8080, "/", true))
   }
   ////////////////////////////////////////////////////////////////////////////////
   def runClient(name:String): Unit = {
