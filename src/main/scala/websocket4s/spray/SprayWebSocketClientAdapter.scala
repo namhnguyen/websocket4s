@@ -78,18 +78,26 @@ class SprayWebSocketClientAdapter
 ////////////////////////////////////////////////////////////////////////////////
 object BufferActor {
   object RemoveConnection
+  object CheckQueueAndConnection
 }
 ////////////////////////////////////////////////////////////////////////////////
 class BufferActor extends Actor {
   private var connection:Option[ActorRef] = None
-
+  private val queue = scala.collection.mutable.Queue[TextFrame]()
   override def receive = {
-    case conn:ActorRef => this.connection = Some(conn)
+    case conn:ActorRef => {
+      this.connection = Some(conn)
+      while(this.queue.nonEmpty) {
+        val textFrame = queue.dequeue()
+        conn ! textFrame
+      }
+    }
     case textFrame:TextFrame =>
       if (connection.isDefined)
         connection.get ! textFrame
       else
-        self ! textFrame
+        queue.enqueue(textFrame)
+
     case RemoveConnection => this.connection = None
   }
 }
