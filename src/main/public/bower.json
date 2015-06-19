@@ -1,0 +1,35 @@
+{
+  "name": "websocket4s",
+  "version": "0.1.0",
+  "homepage": "https://github.com/namhnguyen/data-sense",
+  "authors": [
+    "Nam Nguyen <namnguyen@outlook.com>"
+  ],
+  "description": "Websocket4s Javascript Client Library",
+  "main": "main.js",
+  "moduleType": [
+    "amd"
+  ],
+  "keywords": [
+    "websocket"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "lodash": null,
+    "react-router": null,
+    "requirejs":null,
+    "requirejs-react-jsx":null,
+    "requirejs-text":null,
+    "promise-js":null,
+    "rest":null,
+    "when":null,
+    "resolve-url":null
+  },
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ]
+}

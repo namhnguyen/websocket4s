@@ -18,3 +18,4 @@ project/plugins/project/
 .worksheet
 
 # nom specific
+bower_components/
