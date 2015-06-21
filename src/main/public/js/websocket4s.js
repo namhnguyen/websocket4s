@@ -110,11 +110,23 @@ define(function(require){
       //private
       webSocket.onmessage = function(event){
         var data = event.data;
+        console.log("received 2 : "+data);
         var json = JSON.parse(data);
         if (json.type){
           if (json.type===namespace.TransportPackage.Message||
             json.type===namespace.TransportPackage.RouteMessage){
             
+
+          }else if (json.type===namespace.Request ||
+                    json.type===namespace.RouteRequest ||
+                    json.type===namespace.RouteRequestAny
+          ){
+
+          }else if (json.type===namespace.Response ||
+                    json.type===namespace.RouteResponse ||
+                    json.type===namespace.RouteResponseAny
+          ){
+
           }
         }
       };
