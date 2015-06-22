@@ -16,8 +16,13 @@ require(["websocket4s"],function(websocket4s){
   };
   //console.log(websocket4s.newID());
   setTimeout(function() {
-      var r = clientEndPoint.askServer("test message");
-      r.then(function(a){console.log(a)},function(){});
+      for (var i = 1 ;i< 20;i++) {
+        var r = clientEndPoint.askServer("test message "+i);
+        r.then(function (a) {
+          console.log(a)
+        }, function () {
+        });
+      }
     },
     3000)
 });

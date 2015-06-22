@@ -25,6 +25,28 @@ define(function(require){
       RouteMessage :"RM"
     },
 
+    Response:function(ok,data,endPointId,exception){
+      this.ok = ok;
+      this.data = data;
+      this.endPointId = endPointId;
+      this.exception = exception;
+    },
+
+    Request:function(id,data,senderId,receiverId,forTags){
+      this.id = id;
+      this.data =data;
+      this.senderId = senderId;
+      this.receiverId = receiverId;
+      this.forTags = forTags;
+    },
+
+    Message:function(data,senderId,receiverId,forTags){
+      this.data = data;
+      this.senderId = senderId;
+      this.receiverId = receiverId;
+      this.forTags = forTags;
+    },
+
     ClientEndPoint:function(webSocket){
       var requestMap = { };
       var defaultTimeout = 10000;
@@ -110,26 +132,80 @@ define(function(require){
       //private
       webSocket.onmessage = function(event){
         var data = event.data;
-        console.log("received 2 : "+data);
+        console.log("received: "+data);
         var json = JSON.parse(data);
         if (json.type){
           if (json.type===namespace.TransportPackage.Message||
             json.type===namespace.TransportPackage.RouteMessage){
-            
+            runMessageReceived(json);
 
-          }else if (json.type===namespace.Request ||
-                    json.type===namespace.RouteRequest ||
-                    json.type===namespace.RouteRequestAny
+          }else if (json.type===namespace.TransportPackage.Request ||
+                    json.type===namespace.TransportPackage.RouteRequest ||
+                    json.type===namespace.TransportPackage.RouteRequestAny
           ){
-
-          }else if (json.type===namespace.Response ||
-                    json.type===namespace.RouteResponse ||
-                    json.type===namespace.RouteResponseAny
+            runRequestReceived(json);
+          }else if (json.type===namespace.TransportPackage.Response ||
+                    json.type===namespace.TransportPackage.RouteResponse ||
+                    json.type===namespace.TransportPackage.RouteResponseAny
           ){
-
+            runResponseReceived(json);
           }
         }
       };
+      //------------------------------------------------------------------------
+      function runMessageReceived(transportPackage){
+        if (typeof(this.onMessageReceived)==="function"){
+          var message = new namespace.Message(
+            transportPackage.data,transportPackage.from
+            ,transportPackage.to,transportPackage.tags);
+          this.onMessageReceived(message);
+        }
+      }
+      //------------------------------------------------------------------------
+      function runRequestReceived(transportPackage){
+        if (typeof(this.onRequestReceived)==="function"){
+          var request = new namespace.Request(
+            transportPackage.id,transportPackage.data
+            ,transportPackage.from,transportPackage.to,transportPackage.tags);
+          var response = this.onRequestReceived(request);
+          var responseType = namespace.TransportPackage.Response;
+          if (transportPackage.type == namespace.TransportPackage.RouteRequestAny)
+            responseType = namespace.TransportPackage.RouteRequestAny;
+          else if (transportPackage.type == namespace.TransportPackage.RouteRequest)
+            responseType = namespace.TransportPackage.RouteRequest;
+          else responseType = namespace.TransportPackage.Response;
+          if (response!=null){
+            var responseTransportPackage = {
+              from:request.receiverId,
+              to:request.senderId,
+              tags:request.forTags,
+              id : request.id,
+              data:response.data,
+              type:responseType
+            };
+            var json = JSON.stringify(responseTransportPackage);
+            webSocket.send(json);
+          }
+        }
+      }
+      //------------------------------------------------------------------------
+      function runResponseReceived(transportPackage){
+        var requestId = transportPackage.id;
+        if (requestId in requestMap) {
+          var defer = requestMap[requestId];
+          var ok = true;
+          if (transportPackage.error)
+            ok = false;
+          var response = new namespace.Response(
+            ok,transportPackage.data,transportPackage.from,transportPackage.error);
+          if (response.ok)
+            defer.resolve(response);
+          else
+            defer.reject(response);
+          delete requestMap[requestId];
+        }
+      }
+      //------------------------------------------------------------------------
       //
       //webSocket.onclose = function(event){
       //
