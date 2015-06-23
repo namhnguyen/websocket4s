@@ -74,6 +74,10 @@ object SprayServer {
       override def onConnect(): Unit = {
         println("Server open connection")
         println(s"Register Table Size [${registerTable.size}]")
+//        WebSocketSystem.scheduler.schedule(new Runnable {
+//          override def run(): Unit = serverEndPoint.ask("hello world").map(r=>println(r))
+//        },1000,TimeUnit.MILLISECONDS)
+
       }
 
       override def onClose(reason: String): Unit = {

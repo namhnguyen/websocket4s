@@ -1,6 +1,7 @@
 define(function(require){
   var when = require("when");
 
+
   var namespace = {
     timeOut:"Request TimeOut!",
 
@@ -50,9 +51,9 @@ define(function(require){
     ClientEndPoint:function(webSocket){
       var requestMap = { };
       var defaultTimeout = 10000;
+      var self = this;
       //------------------------------------------------------------------------
       //public interface
-
       this.onMessageReceived = null;
       this.onRequestReceived = null;
 
@@ -132,38 +133,37 @@ define(function(require){
       //private
       webSocket.onmessage = function(event){
         var data = event.data;
-        console.log("received: "+data);
         var json = JSON.parse(data);
         if (json.type){
           if (json.type===namespace.TransportPackage.Message||
             json.type===namespace.TransportPackage.RouteMessage){
-            runMessageReceived(json);
+            self.runMessageReceived(json);
 
           }else if (json.type===namespace.TransportPackage.Request ||
                     json.type===namespace.TransportPackage.RouteRequest ||
                     json.type===namespace.TransportPackage.RouteRequestAny
           ){
-            runRequestReceived(json);
+            self.runRequestReceived(json);
           }else if (json.type===namespace.TransportPackage.Response ||
                     json.type===namespace.TransportPackage.RouteResponse ||
                     json.type===namespace.TransportPackage.RouteResponseAny
           ){
-            runResponseReceived(json);
+            self.runResponseReceived(json);
           }
         }
       };
       //------------------------------------------------------------------------
-      function runMessageReceived(transportPackage){
-        if (typeof(this.onMessageReceived)==="function"){
+      this.runMessageReceived = function(transportPackage){
+        if (namespace.isFunction(this.onMessageReceived)){
           var message = new namespace.Message(
             transportPackage.data,transportPackage.from
             ,transportPackage.to,transportPackage.tags);
           this.onMessageReceived(message);
         }
-      }
+      };
       //------------------------------------------------------------------------
-      function runRequestReceived(transportPackage){
-        if (typeof(this.onRequestReceived)==="function"){
+      this.runRequestReceived=function(transportPackage){
+        if (namespace.isFunction(this.onRequestReceived)){
           var request = new namespace.Request(
             transportPackage.id,transportPackage.data
             ,transportPackage.from,transportPackage.to,transportPackage.tags);
@@ -180,16 +180,16 @@ define(function(require){
               to:request.senderId,
               tags:request.forTags,
               id : request.id,
-              data:response.data,
+              data:response,
               type:responseType
             };
             var json = JSON.stringify(responseTransportPackage);
             webSocket.send(json);
           }
         }
-      }
+      };
       //------------------------------------------------------------------------
-      function runResponseReceived(transportPackage){
+      this.runResponseReceived = function(transportPackage){
         var requestId = transportPackage.id;
         if (requestId in requestMap) {
           var defer = requestMap[requestId];
@@ -204,7 +204,7 @@ define(function(require){
             defer.reject(response);
           delete requestMap[requestId];
         }
-      }
+      };
       //------------------------------------------------------------------------
       //
       //webSocket.onclose = function(event){
@@ -219,7 +219,13 @@ define(function(require){
       //
       //};
 
+    },
+
+    isFunction:function(functionToCheck) {
+      var getType = {};
+      return functionToCheck && getType.toString.call(functionToCheck) === '[object Function]';
     }
+
   };
   return namespace;
 });

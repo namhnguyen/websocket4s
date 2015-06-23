@@ -14,15 +14,22 @@ require(["websocket4s"],function(websocket4s){
   clientEndPoint.onmessage = function(event){
     console.log(event.data)
   };
+  clientEndPoint.onMessageReceived = function(message){
+    console.log(message.data);
+  };
+  clientEndPoint.onRequestReceived = function(request){
+    console.log(request.data);
+    return "response for ["+request.data+"]";
+  };
   //console.log(websocket4s.newID());
-  setTimeout(function() {
-      for (var i = 1 ;i< 20;i++) {
-        var r = clientEndPoint.askServer("test message "+i);
-        r.then(function (a) {
-          console.log(a)
-        }, function () {
-        });
-      }
-    },
-    3000)
+  //setTimeout(function() {
+  //    for (var i = 1 ;i< 20;i++) {
+  //      var r = clientEndPoint.askServer("test message "+i);
+  //      r.then(function (a) {
+  //        console.log(a)
+  //      }, function () {
+  //      });
+  //    }
+  //  },
+  //  3000)
 });
